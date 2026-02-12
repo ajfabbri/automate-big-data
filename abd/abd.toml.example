@@ -1,5 +1,5 @@
 [hadoop]
-hadoop_git_path = "../hadoop"
-cloudstore_git_path = "../cloudstore"
+hadoop_git_path = "build/hadoop"
+cloudstore_git_path = "build/cloudstore"
 num_nodes = 3
 test_s3a = true

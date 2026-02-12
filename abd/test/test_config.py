@@ -18,6 +18,6 @@ class TestConfigLoader(unittest.TestCase):
         hadoop_config = config.hadoop
         if hadoop_config is None:
             self.fail("Expected hadoop_config to be loaded, got None")
-        self.assertEqual(hadoop_config.hadoop_git_path, "../hadoop")
-        self.assertEqual(hadoop_config.cloudstore_git_path, "../cloudstore")
+        self.assertEqual(hadoop_config.hadoop_git_path, "build/hadoop")
+        self.assertEqual(hadoop_config.cloudstore_git_path, "build/cloudstore")
         self.assertTrue(hadoop_config.test_s3a)
