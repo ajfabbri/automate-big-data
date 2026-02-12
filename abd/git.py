@@ -1,8 +1,6 @@
 
 from pathlib import Path
 import logging
-import subprocess
-from subprocess import CompletedProcess
 
 from abd import command
 

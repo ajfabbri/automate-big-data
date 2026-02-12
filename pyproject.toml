@@ -38,3 +38,9 @@ include = [
   "dist-readme.md",
 ]
 #exclude = [ ]
+
+[tool.pyright]
+include = ["abd"]
+pythonVersion = "3.12"
+venvPath = "."
+venv = "venv"

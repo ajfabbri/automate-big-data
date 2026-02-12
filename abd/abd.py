@@ -4,7 +4,7 @@ import argparse
 import logging
 import sys
 
-from abd.config import CLOUDSTORE_GIT_URI, CLOUSTORE_GIT_REF, Config, HadoopConfig
+from abd.config import CLOUDSTORE_GIT_URI, CLOUSTORE_GIT_REF, Config
 from abd.config import HADOOP_GIT_URI, HADOOP_GIT_REF, Loader
 from pathlib import Path
 
@@ -128,8 +128,8 @@ def main() -> ExitCode:
     subparsers = parser.add_subparsers(dest="command", required=True)
     config_p = subparsers.add_parser("config", help="Configure settings")
     add_interactive_opt(config_p)
-    test_p = subparsers.add_parser("test", help="Run tests")
-    check_p = subparsers.add_parser("check", help="Run checks")
+    _ = subparsers.add_parser("test", help="Run tests")
+    _ = subparsers.add_parser("check", help="Run checks")
     install_p = subparsers.add_parser("install", help="Install dependencies")
     add_interactive_opt(install_p)
     container_p = subparsers.add_parser("container", help="Container commands")
@@ -138,10 +138,10 @@ def main() -> ExitCode:
                              help="Skip updating dependencies / images")
     container_sub = container_p.add_subparsers(dest="container_cmd", required=True)
     c_build_p = container_sub.add_parser("build", help="Build containers")
-    c_list_p = container_sub.add_parser("list", help="List containers")
-    c_run_p = container_sub.add_parser("run", help="Run container(s)")
-    c_stop_p = container_sub.add_parser("stop", help="Stop container(s)")
-    c_attach_p = container_sub.add_parser("attach", help="Attach to a running container")
+    _ = container_sub.add_parser("list", help="List containers")
+    _ = container_sub.add_parser("run", help="Run container(s)")
+    _ = container_sub.add_parser("stop", help="Stop container(s)")
+    _ = container_sub.add_parser("attach", help="Attach to a running container")
     add_interactive_opt(c_build_p)
 
     # Parse args and configure logging
