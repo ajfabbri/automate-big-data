@@ -20,6 +20,7 @@ CLOUSTORE_GIT_REF = "main"
 HADOOP_GIT_URI = "git@github.com:apache/hadoop.git"
 HADOOP_GIT_REF = "trunk"
 
+
 @dataclass
 class HadoopConfig:
     num_nodes: int = DEFAULT_NUM_NODES
