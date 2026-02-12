@@ -1,0 +1,40 @@
+[project]
+name = "automate_big_data"
+version = "0.0.1"
+authors = [{ name = "Aaron Fabbri", email = "fabbri@apache.org" }]
+description = "Tools for automating testing of open source big data stacks."
+readme = "dist-readme.md"
+requires-python = ">=3.12"
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Environment :: Console",
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: Software Development :: Testing",
+]
+dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/ajfabbri/automate-big-data"
+Issues = "https://github.com/ajfabbri/automate-big-data/issues"
+
+[project.scripts]
+abd = "abd.abd:main"
+
+[build-system]
+requires = ["hatchling", "hatch-requirements-txt"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata.hooks.requirements_txt]
+files = ["requirements.txt"]
+
+[tool.hatch.build.targets.wheel]
+include = [
+  "/abd",
+  "LICENSE",
+  "requirements.txt",
+  "README.md",
+  "dist-readme.md",
+]
+#exclude = [ ]
