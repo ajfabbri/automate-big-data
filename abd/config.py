@@ -78,7 +78,7 @@ class Loader:
             if not prompt_bool("Do you want to edit existing config?", False):
                 return existing_config
         else:
-            existing_config = load_template_or_throw()
+            existing_config = self.load_template_or_throw()
 
         existing_hadoop = existing_config.hadoop is not None
         enable_hadoop = prompt_bool("Enable Hadoop?", existing_hadoop)

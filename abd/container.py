@@ -1,8 +1,9 @@
 from pathlib import Path
 import logging
+from typing import Protocol, override
 
 import abd.command as cmd
-from abd.config import Config, HadoopConfig
+from abd.config import Config
 from abd.context import App
 from abd.project import ExitCode
 log = logging.getLogger(__name__)
@@ -45,14 +46,14 @@ class Containers:
     #         tail -f /dev/null"
     #     return cmd.run_throws(c)
 
-    def run_all(self):
+    def run_all(self) -> ExitCode:
         # Initial stab:
         # 1. start hadoop build container
         if not self.cfg.hadoop:
             log.error("Hadoop not enabled in config, cannot run containers.")
-            return
+            return 1
 
-        hbuild = HadoopBuild(self.app, self.cfg.hadoop)
+        hbuild = HadoopBuild(self.app, self.cfg)
         # local_cloudstore = Path(self.cfg.hadoop.cloudstore_git_path)
 
         # From hadoop.git:
@@ -72,20 +73,55 @@ class Containers:
         # 3. start hadoop node containers
         # 4. Deploy build(s) to node containers
         # 5. Run tests in node containers
+        return 0
+
+    def stop(self, filter: str = "all") -> ExitCode:
+        filter_str = ""
+        if filter != all and filter != "":
+            filter_str = f"--filter name={filter}"
+        log.info(f"Stopping containers with filter: '{filter}'")
+        c = f"docker ps -q {filter_str}"
+        try:
+            output = cmd.run_throws(c)
+            container_ids = output.strip().splitlines()
+            for cid in container_ids:
+                cmd.run_throws(f"docker stop {cid}")
+        except Exception as e:
+            log.error(f"Failed to stop containers: {e}")
+            return 1
+        return 0
 
 
-class HadoopBuild:
-    """ Support for building a container to build hadoop in. """
+class ContainerBuild(Protocol):
+    cfg: Config
+    app: App
+    user: str
+    uid: int
+    gid: int
+    docker_home_dir: str
+    local_home: Path
 
-    def __init__(self, app: App, hadoop_cfg: HadoopConfig):
-        self.cfg = hadoop_cfg
+    def __init__(self, app: App, cfg: Config):
+        self.cfg = cfg
         self.app = app
         self.user = app.sysinfo.get_user()
         self.uid = app.sysinfo.get_uid()
         self.gid = app.sysinfo.get_gid()
         self.docker_home_dir = f"/home/{self.user}"
         self.local_home = app.sysinfo.get_user_home()
-        self.local_hadoop = Path(self.cfg.hadoop_git_path).resolve(strict=True)
+
+
+class HadoopBuild(ContainerBuild):
+    """ Support for building a container to build hadoop in. """
+
+    @override
+    def __init__(self, app: App, cfg: Config):
+        super().__init__(app, cfg)
+        if cfg.hadoop:
+            self.h_cfg = cfg.hadoop
+        else:
+            raise Exception("Hadoop config is required for HadoopBuild.")
+        self.local_hadoop = Path(self.h_cfg.hadoop_git_path).resolve(strict=True)
 
     def get_build_image_name(self) -> str:
         # just throw on error; should be unlikely at this point
@@ -95,7 +131,7 @@ class HadoopBuild:
         # Use upstream hadoop container definition for a build machine
 
         # Build base image
-        hadoop_path = Path(self.cfg.hadoop_git_path)
+        hadoop_path = Path(self.h_cfg.hadoop_git_path)
         if self.app.sysinfo.get_cpu_arch() in ["arm64", "aarch64"]:
             docker_file = HADOOP_BASE_DOCKERFILE_ARM
         else:
@@ -122,7 +158,7 @@ class HadoopBuild:
 
     def run_container(self) -> ExitCode:
         build_image = self.get_build_image_name()
-        # local_cloudstore = Path(self.cfg.hadoop.cloudstore_git_path)
+        # local_cloudstore = Path(self.h_cfg.hadoop.cloudstore_git_path)
 
         # From hadoop.git:
         # By mapping the .m2 directory you can do an mvn install from

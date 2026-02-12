@@ -63,7 +63,7 @@ def do_test(app: App):
     print("XXX TODO test")
 
 
-def do_build(app: App, cfg: HadoopConfig) -> ExitCode:
+def do_build(app: App, cfg: Config) -> ExitCode:
     """Handle container build command. Returns exit code (0 on success)."""
     h_build = HadoopBuild(app, cfg)
     return h_build.build_image()
@@ -100,16 +100,16 @@ def do_container_throws(app: App, args: argparse.Namespace):
         print("Hadoop not enabled in config, skipping.")
         return
 
+    filt = args.name if args.name else ""
     containers = Containers(app, cfg)
     if args.container_cmd == "build":
-        return do_build(app, cfg.hadoop)
+        return do_build(app, cfg)
     elif args.container_cmd == "list":
-        filter = args.name if args.name else ""
-        print(containers.list(filter))
+        print(containers.list(filt))
     elif args.container_cmd == "run":
         containers.run_all()
     elif args.container_cmd == "stop":
-        pass
+        containers.stop(filt)
     elif args.container_cmd == "attach":
         containers.attach(args.name)
     else:
@@ -128,6 +128,7 @@ def main() -> ExitCode:
     parser.add_argument("-v", "--verbose", action="count", default=0)
     subparsers = parser.add_subparsers(dest="command", required=True)
     config_p = subparsers.add_parser("config", help="Configure settings")
+    add_interactive_opt(config_p)
     test_p = subparsers.add_parser("test", help="Run tests")
     check_p = subparsers.add_parser("check", help="Run checks")
     install_p = subparsers.add_parser("install", help="Install dependencies")
