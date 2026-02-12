@@ -19,16 +19,16 @@ class Containers:
         self.cfg = cfg
 
     @classmethod
-    def list(cls, filter: str = "") -> list[str]:
-        if filter != "":
-            filter = f" --filter name={filter}"
-        c = f"docker ps --format '{{{{.Names}}}}'{filter}"
+    def list(cls, name_filter: str | None = None) -> list[str]:
+        filter_str = f" --filter {name_filter}" if name_filter else ""
+        c = f"docker ps --format '{{{{.Names}}}}'{filter_str}"
         output = cmd.run_throws(c)
         return output.strip().splitlines()
 
     @classmethod
-    def list_images(cls, filter: str = "") -> list[str]:
-        c = f"docker images --format '{{{{.Repository}}}}:{{{{.Tag}}}}' {filter}"
+    def list_images(cls, name_filter: str | None) -> list[str]:
+        filter_str = f" --filter reference={name_filter}" if name_filter else ""
+        c = f"docker images --format '{{{{.Repository}}}}:{{{{.Tag}}}}' {filter_str}"
         output = cmd.run_throws(c)
         return output.strip().splitlines()
 
