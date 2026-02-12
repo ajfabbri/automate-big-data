@@ -100,16 +100,15 @@ def do_container_throws(app: App, args: argparse.Namespace):
         print("Hadoop not enabled in config, skipping.")
         return
 
-    filt = args.name if args.name else ""
     containers = Containers(app, cfg)
     if args.container_cmd == "build":
         return do_build(app, cfg)
     elif args.container_cmd == "list":
-        print(containers.list(filt))
+        print(containers.list(args.name))
     elif args.container_cmd == "run":
         containers.run_all()
     elif args.container_cmd == "stop":
-        containers.stop(filt)
+        containers.stop(args.name)
     elif args.container_cmd == "attach":
         containers.attach(args.name)
     else:
