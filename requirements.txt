@@ -1,4 +1,3 @@
--e git+ssh://git@github.com/ajfabbri/automate-big-data.git@04598ce528346d7a4e020eed84570d9b4ab04d9c#egg=automate_big_data
 flake8==7.3.0
 markdown-it-py==4.0.0
 mccabe==0.7.0
