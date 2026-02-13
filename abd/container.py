@@ -1,6 +1,7 @@
 from pathlib import Path
 import logging
 from typing import Protocol, override
+import typing
 
 import abd.command as cmd
 from abd.config import Config
@@ -26,7 +27,7 @@ class Containers:
         return output.strip().splitlines()
 
     @classmethod
-    def list_images(cls, name_filter: str | None) -> list[str]:
+    def list_images(cls, name_filter: str | None = None) -> typing.List[str]:  # pyright quirk
         filter_str = f" --filter reference={name_filter}" if name_filter else ""
         c = f"docker images --format '{{{{.Repository}}}}:{{{{.Tag}}}}' {filter_str}"
         output = cmd.run_throws(c)
