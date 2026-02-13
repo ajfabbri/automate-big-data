@@ -36,10 +36,10 @@ class Config:
 
 
 class Loader:
-    CONF_FILENAME = "abd.toml"
-    CONF_TEMPLATE = "abd.toml.example"
+    CONF_FILENAME = Path("abd.toml")
+    CONF_TEMPLATE = Path("abd", "abd.toml.example")
 
-    def load(self, config_filename: Optional[str] = None) -> Optional[Config]:
+    def load(self, config_filename: Optional[Path] = None) -> Optional[Config]:
         """Load configuration from file and return it, if it exists."""
 
         _filename = config_filename or self.CONF_FILENAME
