@@ -37,6 +37,7 @@ def clone_git(local_dir: Path, git_uri: str, git_ref: str, is_interactive: bool)
 
 
 def do_install(app: App, is_interactive: bool = True) -> Config:
+    """ Check config and install local clones of git repos. """
 
     cfg = do_config(is_interactive)
     if not cfg.hadoop:
@@ -135,7 +136,7 @@ def main() -> ExitCode:
     container_p = subparsers.add_parser("container", help="Container commands")
     container_p.add_argument("-n", "--name", help="container name / filter")
     container_p.add_argument("-c", "--cached", action="store_true",
-                             help="Skip updating dependencies / images")
+                             help="Skip updating dependencies / images / build")
     container_sub = container_p.add_subparsers(dest="container_cmd", required=True)
     c_build_p = container_sub.add_parser("build", help="Build containers")
     _ = container_sub.add_parser("list", help="List containers")
