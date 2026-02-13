@@ -6,7 +6,7 @@ import typing
 import abd.command as cmd
 from abd.config import Config
 from abd.context import App
-from abd.project import ExitCode
+from abd.project import ExitCode, Project
 log = logging.getLogger(__name__)
 
 HADOOP_BASE_DOCKERFILE = Path("Dockerfile_ubuntu_24")
@@ -47,7 +47,7 @@ class Containers:
     #         tail -f /dev/null"
     #     return cmd.run_throws(c)
 
-    def run_all(self) -> ExitCode:
+    def run_all(self, is_cached: bool) -> ExitCode:
         # Initial stab:
         # 1. start hadoop build container
         if not self.cfg.hadoop:
@@ -62,17 +62,32 @@ class Containers:
         # within the container and use the result on your normal
         # system.  And this also is a significant speedup in subsequent
         # builds because the dependencies are downloaded only once.
-        ret = hbuild.run_container()
-        if ret != 0:
-            return ret
+        if not is_cached:
+            ret = hbuild.run_container()
+            if ret != 0:
+                return ret
 
-        # 2. run build script in container
-        ret = hbuild.build_in_container()
-        if ret != 0:
-            return ret
+            # 2. run build script in container
+            ret = hbuild.build_in_container()
+            if ret != 0:
+                return ret
+
+        # XXX TODO skip on cached if exists
+        nbuild = ClusterNodeBuild(self.app, self.cfg)
+        for i in range(self.cfg.hadoop.num_nodes):
+            ret = nbuild.run_container(i)
+            if ret != 0:
+                return ret
 
         # 3. start hadoop node containers
+
         # 4. Deploy build(s) to node containers
+        jars = hbuild.find_hadoop_jars()
+        if not jars:
+            log.error("No hadoop jars found after build.")
+            return 1
+        jar = jars[0]
+        log.info(f"Using hadoop jar: {jar}")
         # 5. Run tests in node containers
         return 0
 
@@ -112,6 +127,15 @@ class ContainerBuild(Protocol):
         self.docker_home_dir = f"/home/{self.user}"
         self.local_home = app.sysinfo.get_user_home()
 
+    def get_build_image_name(self) -> str:
+        ...
+
+    def build_image(self) -> ExitCode:
+        ...
+
+    def run_container(self, index: int = 0) -> ExitCode:
+        ...
+
 
 class HadoopBuild(ContainerBuild):
     """ Support for building a container to build hadoop in. """
@@ -125,10 +149,12 @@ class HadoopBuild(ContainerBuild):
             raise Exception("Hadoop config is required for HadoopBuild.")
         self.local_hadoop = Path(self.h_cfg.hadoop_git_path).resolve(strict=True)
 
+    @override
     def get_build_image_name(self) -> str:
         # just throw on error; should be unlikely at this point
         return f"hadoop-build-{self.user}"
 
+    @override
     def build_image(self) -> ExitCode:
         # Use upstream hadoop container definition for a build machine
 
@@ -158,7 +184,11 @@ class HadoopBuild(ContainerBuild):
         u_builder = ImageBuilder(self.get_build_image_name(), base_dockerfile.parent)
         return u_builder.build_input(docker_input)
 
-    def run_container(self) -> ExitCode:
+    @override
+    def run_container(self, index: int = 0) -> ExitCode:
+        if index != 0:
+            log.warning("Hadoop build container is single-instance; ignoring index.")
+
         build_image = self.get_build_image_name()
         # local_cloudstore = Path(self.h_cfg.hadoop.cloudstore_git_path)
 
@@ -191,6 +221,45 @@ class HadoopBuild(ContainerBuild):
         "cd {self.docker_home_dir}/hadoop && mvn package -Pdist,native -DskipTests -Dtar"
         """
         return cmd.run_with_status(self.app, build_cmd)
+
+    def find_hadoop_jars(self) -> list[Path]:
+        dist_dir = Path(self.docker_home_dir) / "hadoop" / "hadoop-dist" / "target"
+        list_cmd = f"docker exec hadoop-build bash -c 'find {dist_dir} -name hadoop-common-*.jar'"
+        (exit_code, output) = cmd.run(list_cmd)
+        if exit_code != 0:
+            log.error(f"Failed to list hadoop jars in container: {output}")
+            return []
+
+        return [Path(line.strip()) for line in output.splitlines() if line.strip()]
+
+
+class ClusterNodeBuild(ContainerBuild):
+
+    @override
+    def get_build_image_name(self) -> str:
+        return f"cluster-node-{self.user}"
+
+    @override
+    def build_image(self) -> ExitCode:
+        root = Project.get_project_root()
+        dockerfile = root / "Dockerfile.cluster-node"
+        img_builder = ImageBuilder(self.get_build_image_name(), root)
+        return img_builder.build_dockerfile(dockerfile)
+
+    @override
+    def run_container(self, index: int = 0) -> ExitCode:
+        container_name = f"cluster-node-{index}"
+        run_cmd = f"""
+        docker run --rm=true -u "{self.uid}"
+            --name "{container_name}"
+            -dit
+            {self.get_build_image_name()}
+        """
+        if container_name in Containers.list():
+            log.info(f"Container {container_name} already running.")
+            return 0
+        else:
+            return cmd.run_with_status(self.app, run_cmd, cwd=Project.get_project_root())
 
 
 class ImageBuilder:
