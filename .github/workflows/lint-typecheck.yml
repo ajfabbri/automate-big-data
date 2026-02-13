@@ -38,10 +38,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install pyright
+      - name: Create venv
+        run: python -m venv venv
+
+      - name: Install dependencies
         run: |
-          npm install -g pyright
+          venv/bin/pip install --upgrade pip
+          venv/bin/pip install -r requirements.txt
 
       - name: Run pyright
         run: |
-          pyright abd
+          npx pyright abd
