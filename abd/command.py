@@ -65,6 +65,8 @@ def run_print(cmd: str, cwd: Path | None = None) -> ExitCode:
 
 
 def run_with_status(app: App, cmd: str, cwd: Path | None = None) -> ExitCode:
+    """ Use Rich to run a command and display its output in a live-updating
+    panel, along with a status line showing the elapsed time. """
     cmd = _join_lines(cmd)
     output_lines = []
     start = time.time()

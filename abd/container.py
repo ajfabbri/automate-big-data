@@ -94,6 +94,7 @@ class Containers:
 
 
 class ContainerBuild(Protocol):
+    """ Common interface for container image build and run classes. """
     cfg: Config
     app: App
     user: str
