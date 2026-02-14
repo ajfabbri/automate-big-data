@@ -22,7 +22,7 @@ class Containers:
 
     @classmethod
     def list(cls, name_filter: str | None = None) -> list[str]:
-        filter_str = f" --filter {name_filter}" if name_filter else ""
+        filter_str = f' --filter "name={name_filter}"' if name_filter else ""
         c = f"docker ps --format '{{{{.Names}}}}'{filter_str}"
         output = cmd.run_throws(c)
         return output.strip().splitlines()
@@ -34,7 +34,8 @@ class Containers:
         output = cmd.run_throws(c)
         return output.strip().splitlines()
 
-    def attach(self, container_name: str) -> ExitCode:
+    @classmethod
+    def attach(cls, container_name: str) -> ExitCode:
         (ret, output) = cmd.run("which docker")
         if ret != 0:
             log.error("Docker not found, cannot attach to container.")
@@ -327,3 +328,12 @@ class ImageBuilder:
         command = f"docker build -t {self.image_name} -"
         (exit_code, _) = cmd.run(command, cwd=self.build_path, input=input)
         return exit_code
+
+    def clean_image(self) -> ExitCode:
+        return self.clean_image_by_name(self.image_name)
+
+    @classmethod
+    def clean_image_by_name(cls, image_name: str) -> ExitCode:
+        command = f"docker rmi {image_name}"
+        (err, _) = cmd.run(command)
+        return err

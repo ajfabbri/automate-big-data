@@ -46,10 +46,11 @@ def run_raw(cmd: list[str], cwd: Path | None = None) -> ExitCode:
     return result.returncode
 
 
-def run_print(cmd: str, cwd: Path | None = None) -> ExitCode:
+def run_print(cmd: str, cwd: Path | None = None, log_prefix="", quiet_failure=False) -> ExitCode:
     """ Run a command and stream its output to the console. """
     cmd = _join_lines(cmd)
-    log.info(f"-> {cmd} (cwd={cwd})")
+    p = f"[{log_prefix}] " if log_prefix else ""
+    log.info(f"{p}-> {cmd} (cwd={cwd})")
     with Popen(cmd, shell=True, text=True, cwd=cwd, stdout=subprocess.PIPE,
                stderr=subprocess.STDOUT) as proc:
         if proc.stdout is None:
@@ -59,7 +60,7 @@ def run_print(cmd: str, cwd: Path | None = None) -> ExitCode:
             sys.stdout.write("> " + line)
             sys.stdout.flush()
         ret = proc.wait()
-        if ret != 0:
+        if ret != 0 and not quiet_failure:
             log.error(f"Command failed with exit code {proc.returncode}")
         return ret
 
@@ -77,7 +78,7 @@ def run_with_status(app: App, cmd: str, cwd: Path | None = None) -> ExitCode:
         Layout(name="output", size=output_rows),
         Layout(name="status", size=1)
     )
-    with Live(layout, refresh_per_second=4):
+    with Live(layout, refresh_per_second=4, screen=False):
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, cwd=cwd, text=True)
         if proc.stdout is None:
