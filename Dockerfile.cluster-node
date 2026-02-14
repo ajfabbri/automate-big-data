@@ -3,6 +3,11 @@ FROM ubuntu:24.04
 # Set non-interactive frontend for apt
 ENV DEBIAN_FRONTEND=noninteractive
 
+ARG USER_UID=1001
+ARG USER_GID=1001
+ARG USERNAME=hadoop
+ARG GROUPNAME=hadoop
+
 # Update and install core tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openjdk-17-jdk \
@@ -34,9 +39,17 @@ ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV PATH=$JAVA_HOME/bin:$PATH
 
 # Set up a user for development (optional)
-RUN useradd -ms /bin/bash hadoop && echo "hadoop ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/hadoop
-USER hadoop
-WORKDIR /home/hadoop
+RUN groupadd --gid $USER_GID $GROUPNAME && \
+    useradd --uid $USER_UID --gid $USER_GID --shell /bin/bash --create-home $USERNAME
+
+RUN echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/hadoop
+RUN mkdir -p /opt/hadoop
+RUN chown -R $USERNAME:$GROUPNAME /opt/hadoop
+USER $USERNAME
+ENV HADOOP_HOME=/opt/hadoop
+ENV PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
+
+WORKDIR /home/$USERNAME
 
 # Default shell
 CMD ["/bin/bash"]
