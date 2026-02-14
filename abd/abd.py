@@ -11,6 +11,9 @@ from pathlib import Path
 from abd.container import ClusterNodeBuild, Containers, HadoopBuild
 from abd.context import App
 from abd.project import ExitCode
+from abd.tasks.hadoop import HadoopSanity
+from abd.tasks.sanity import FailingTask
+from abd.tasks.task import Container
 from abd.ui import prompt_bool
 from abd.git import Git
 
@@ -60,8 +63,34 @@ def do_install(app: App, is_interactive: bool = True) -> Config:
     return cfg
 
 
-def do_test(app: App):
-    print("XXX TODO test")
+def do_test(app: App, args: argparse.Namespace) -> ExitCode:
+    cfg = init_container_cfg(app, skip_install=True)
+    nodes = set(Container(cname) for cname in Containers.list("cluster-node"))
+    if not cfg.hadoop:
+        log.error("Hadoop not enabled in config, cannot run tests.")
+        return 1
+    if len(nodes) != cfg.hadoop.num_nodes:
+        log.error(f"Expected {cfg.hadoop.num_nodes} nodes, found {len(nodes)}.")
+        log.info(f"Found nodes: {nodes}")
+
+    # sanity check error propagation
+    exit_check_t = FailingTask()
+    ret = exit_check_t.run_result(nodes)
+    if ret == 0:
+        log.error("⛔️ Failed to propagate failure from {exit_check_t.get_name()}.")
+        return 1
+    else:
+        log.debug("👍 Got expected non-zero exit {ret} from {exit_check_t.get_name()}.")
+
+    # sanity-check hadoop install
+    hadoop_sanity_t = HadoopSanity()
+    ret = hadoop_sanity_t.run_result(nodes)
+    if ret != 0:
+        log.error("⛔️ Hadoop sanity check failed.")
+        return ret
+    else:
+        log.debug("👍 Hadoop sanity check passed.")
+    return 0
 
 
 def do_build(app: App, cfg: Config) -> ExitCode:
@@ -75,15 +104,14 @@ def do_build(app: App, cfg: Config) -> ExitCode:
     return n_build.build_image()
 
 
-def init_container_cfg(app: App, args: argparse.Namespace, is_build: bool) -> Config:
+def init_container_cfg(app: App, skip_install: bool, is_interactive: bool = False) -> Config:
     """ Ensure we're ready for container operations and return the config."""
-    if args.cached or not is_build:
+    if skip_install:
         cfg = Loader().load()
         if not cfg:
             e = "No config found, try `config -i`."
             raise Exception(e)
     else:
-        is_interactive = args.interactive if hasattr(args, "interactive") else False
         cfg = do_install(app, is_interactive)
     return cfg
 
@@ -101,7 +129,12 @@ def do_container(app: App, args: argparse.Namespace) -> ExitCode:
 def do_container_throws(app: App, args: argparse.Namespace):
     """Handle container subcommands. Return exit code (0 for success)."""
 
-    cfg = init_container_cfg(app, args, is_build=(args.container_cmd == "build"))
+    if args.container_cmd != "build":
+        skip_config_install = True
+    else:
+        skip_config_install = args.cached if args.cached else False
+
+    cfg = init_container_cfg(app, skip_config_install, is_interactive=args.interactive)
     if not cfg.hadoop:
         print("Hadoop not enabled in config, skipping.")
         return
@@ -166,7 +199,7 @@ def main() -> ExitCode:
         # init main app context
         app = App()
         if args.command == "test":
-            do_test(app)
+            do_test(app, args)
         elif args.command == "check":
             do_check(app)
         elif args.command == "install":
