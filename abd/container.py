@@ -1,5 +1,6 @@
 from pathlib import Path
 import logging
+import tempfile
 from typing import Protocol, override
 import typing
 
@@ -72,22 +73,25 @@ class Containers:
             if ret != 0:
                 return ret
 
-        # XXX TODO skip on cached if exists
+        # 3. start hadoop node containers
         nbuild = ClusterNodeBuild(self.app, self.cfg)
         for i in range(self.cfg.hadoop.num_nodes):
             ret = nbuild.run_container(i)
             if ret != 0:
                 return ret
 
-        # 3. start hadoop node containers
-
         # 4. Deploy build(s) to node containers
-        jars = hbuild.find_hadoop_jars()
-        if not jars:
-            log.error("No hadoop jars found after build.")
-            return 1
-        jar = jars[0]
-        log.info(f"Using hadoop jar: {jar}")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (err, path) = hbuild.fetch_hadoop_build(Path(tmpdir))
+            if err != 0:
+                return err
+            if not path:
+                return 1
+
+            ret = nbuild.copy_to_containers(path)
+            if ret != 0:
+                return ret
+
         # 5. Run tests in node containers
         return 0
 
@@ -222,18 +226,38 @@ class HadoopBuild(ContainerBuild):
         """
         return cmd.run_with_status(self.app, build_cmd)
 
-    def find_hadoop_jars(self) -> list[Path]:
+    def find_hadoop_release(self) -> Path | None:
         dist_dir = Path(self.docker_home_dir) / "hadoop" / "hadoop-dist" / "target"
-        list_cmd = f"docker exec hadoop-build bash -c 'find {dist_dir} -name hadoop-common-*.jar'"
+        list_cmd = f"docker exec hadoop-build bash -c 'find {dist_dir} -name hadoop-*.tar.gz'"
         (exit_code, output) = cmd.run(list_cmd)
-        if exit_code != 0:
-            log.error(f"Failed to list hadoop jars in container: {output}")
-            return []
+        paths = [Path(line.strip()) for line in output.splitlines() if line.strip()]
+        # prefers newer veraions, and prefer release builds over -SNAPSHOT builds
+        paths.sort(reverse=True)
+        if exit_code != 0 or len(paths) == 0:
+            log.error(f"Failed to find hadoop release.. {output}")
+            return None
+        return paths[0]
 
-        return [Path(line.strip()) for line in output.splitlines() if line.strip()]
+    def fetch_hadoop_build(self, local_dir: Path) -> tuple[ExitCode, Path | None]:
+        path = self.find_hadoop_release()
+        if not path:
+            return (1, None)
+        log.debug(f"Using hadoop build: {path}")
+        c = f"docker cp hadoop-build:{path} {local_dir}/"
+        (ret, _) = cmd.run(c)
+        if ret != 0:
+            log.error("Failed to copy hadoop release from {HADOOP_BUILD_CONTAINER}.")
+            return (ret, None)
+        return (0, local_dir / path.name)
 
 
 class ClusterNodeBuild(ContainerBuild):
+    CONTAINER_USERNAME = "hadoop"
+
+    @override
+    def __init__(self, app: App, cfg: Config):
+        super().__init__(app, cfg)
+        self.docker_home_dir = f"/home/{self.CONTAINER_USERNAME}"
 
     @override
     def get_build_image_name(self) -> str:
@@ -244,13 +268,14 @@ class ClusterNodeBuild(ContainerBuild):
         root = Project.get_project_root()
         dockerfile = root / "Dockerfile.cluster-node"
         img_builder = ImageBuilder(self.get_build_image_name(), root)
-        return img_builder.build_dockerfile(dockerfile)
+        return img_builder.build_dockerfile(dockerfile,
+                                            [f"USERNAME={self.CONTAINER_USERNAME}"])
 
     @override
     def run_container(self, index: int = 0) -> ExitCode:
         container_name = f"cluster-node-{index}"
         run_cmd = f"""
-        docker run --rm=true -u "{self.uid}"
+        docker run --rm=true
             --name "{container_name}"
             -dit
             {self.get_build_image_name()}
@@ -261,15 +286,37 @@ class ClusterNodeBuild(ContainerBuild):
         else:
             return cmd.run_with_status(self.app, run_cmd, cwd=Project.get_project_root())
 
+    def copy_to_containers(self, local_path: Path) -> ExitCode:
+        ret = 0
+        for i in range(self.cfg.hadoop.num_nodes):  # type: ignore
+            container_name = f"cluster-node-{i}"
+            c = f"docker cp {local_path} {container_name}:{self.docker_home_dir}"
+            (ret, output) = cmd.run(c)
+            if ret != 0:
+                log.error(f"Failed to copy {local_path} to {container_name}: {output}")
+                return ret
+            c = f"""
+            docker exec {container_name} bash -c
+            'cd {self.docker_home_dir} &&
+             tar -xzf {local_path.name} --strip-components=1 -C /opt/hadoop'
+            """
+            (ret, output) = cmd.run(c)
+            if ret != 0:
+                log.error(f"Failed to extract hadoop in {container_name}: {output}")
+                return ret
+            log.info(f"✅ Extracted {local_path.name} to {container_name}")
+        return 0
+
 
 class ImageBuilder:
     def __init__(self, image_name: str, build_path: Path):
         self.image_name = image_name
         self.build_path = build_path.resolve(strict=True)
 
-    def build_dockerfile(self, dockerfile: Path) -> ExitCode:
+    def build_dockerfile(self, dockerfile: Path, build_args: list[str] = []) -> ExitCode:
         log.info(f"Building image {self.image_name} from {dockerfile}...")
-        command = f"docker build -t {self.image_name} -f {dockerfile} ."
+        args_str = " ".join(f"--build-arg {arg}" for arg in build_args)
+        command = f"docker build -t {self.image_name} -f {dockerfile} {args_str} ."
         (exit_code, output) = cmd.run(command, cwd=self.build_path)
         log.debug(f"Build output: {output}")
         return exit_code
