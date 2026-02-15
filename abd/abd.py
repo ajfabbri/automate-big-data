@@ -8,9 +8,12 @@ from abd.config import CLOUDSTORE_GIT_URI, CLOUSTORE_GIT_REF, Config
 from abd.config import HADOOP_GIT_URI, HADOOP_GIT_REF, Loader
 from pathlib import Path
 
-from abd.container.container import ClusterNodeBuild, Containers, HadoopBuild
+from abd.container.cluster_node import ClusterNodeBuild
+from abd.container.container import Containers
+from abd.container.hadoop_build import HadoopBuild
 from abd.context import App
 from abd.project import ExitCode
+from abd.runner import Runner
 from abd.tasks.hadoop import HadoopSanity
 from abd.tasks.sanity import FailingTask
 from abd.tasks.task import Container
@@ -134,7 +137,8 @@ def do_container_throws(app: App, args: argparse.Namespace):
     else:
         skip_config_install = args.cached if args.cached else False
 
-    cfg = init_container_cfg(app, skip_config_install, is_interactive=args.interactive)
+    interactive = args.interactive if args.container_cmd == "build" else False
+    cfg = init_container_cfg(app, skip_config_install, is_interactive=interactive)
     if not cfg.hadoop:
         print("Hadoop not enabled in config, skipping.")
         return
@@ -146,7 +150,7 @@ def do_container_throws(app: App, args: argparse.Namespace):
     elif args.container_cmd == "list":
         print(containers.list(args.name))
     elif args.container_cmd == "run":
-        containers.run_all(is_cached)
+        Runner(app, cfg).run_all(is_cached)
     elif args.container_cmd == "stop":
         containers.stop(args.name)
     elif args.container_cmd == "attach":

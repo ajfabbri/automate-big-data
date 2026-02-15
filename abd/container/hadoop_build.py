@@ -3,12 +3,16 @@ import logging
 from typing import override
 from abd.config import Config
 import abd.command as cmd
-from abd.container.container import HADOOP_BASE_DOCKERFILE, \
-    HADOOP_BASE_DOCKERFILE_ARM, HADOOP_BUILD_CONTAINER, ContainerBuild, Containers, ImageBuilder
+from abd.container.builder import ImageBuilder
+from abd.container.container import ContainerBuild, Containers
 from abd.context import App
 from abd.project import ExitCode
 
 log = logging.getLogger(__name__)
+
+HADOOP_BASE_DOCKERFILE = Path("Dockerfile_ubuntu_24")
+HADOOP_BASE_DOCKERFILE_ARM = Path("Dockerfile_ubuntu_24_aarch64")
+HADOOP_BUILD_CONTAINER = "hadoop-build"
 
 
 class HadoopBuild(ContainerBuild):
@@ -24,7 +28,7 @@ class HadoopBuild(ContainerBuild):
         self.local_hadoop = Path(self.h_cfg.hadoop_git_path).resolve(strict=True)
 
     @override
-    def get_build_image_name(self) -> str:
+    def get_image_name(self) -> str:
         # just throw on error; should be unlikely at this point
         return f"hadoop-build-{self.user}"
 
@@ -55,7 +59,7 @@ class HadoopBuild(ContainerBuild):
         RUN echo "{self.user} ALL=NOPASSWD: ALL" > "/etc/sudoers.d/hadoop-build-{self.uid}"
         ENV HOME="/home/{self.user}"
         """
-        u_builder = ImageBuilder(self.get_build_image_name(), base_dockerfile.parent)
+        u_builder = ImageBuilder(self.get_image_name(), base_dockerfile.parent)
         return u_builder.build_input(docker_input)
 
     @override
@@ -63,7 +67,7 @@ class HadoopBuild(ContainerBuild):
         if index != 0:
             log.warning("Hadoop build container is single-instance; ignoring index.")
 
-        build_image = self.get_build_image_name()
+        build_image = self.get_image_name()
         # local_cloudstore = Path(self.h_cfg.hadoop.cloudstore_git_path)
 
         # From hadoop.git:
