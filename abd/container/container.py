@@ -59,11 +59,6 @@ class Containers:
         hbuild = HadoopBuild(self.app, self.cfg)
         # local_cloudstore = Path(self.cfg.hadoop.cloudstore_git_path)
 
-        # From hadoop.git:
-        # By mapping the .m2 directory you can do an mvn install from
-        # within the container and use the result on your normal
-        # system.  And this also is a significant speedup in subsequent
-        # builds because the dependencies are downloaded only once.
         if not is_cached:
             ret = hbuild.run_container()
             if ret != 0:

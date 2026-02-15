@@ -8,7 +8,7 @@ from abd.config import CLOUDSTORE_GIT_URI, CLOUSTORE_GIT_REF, Config
 from abd.config import HADOOP_GIT_URI, HADOOP_GIT_REF, Loader
 from pathlib import Path
 
-from abd.container import ClusterNodeBuild, Containers, HadoopBuild
+from abd.container.container import ClusterNodeBuild, Containers, HadoopBuild
 from abd.context import App
 from abd.project import ExitCode
 from abd.tasks.hadoop import HadoopSanity
