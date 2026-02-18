@@ -34,6 +34,10 @@ class HadoopBuild(ContainerBuild):
         return f"hadoop-build-{self.user}"
 
     @override
+    def get_container_name(self, index: int = 0) -> str:
+        return HADOOP_BUILD_CONTAINER
+
+    @override
     def build_image(self, is_cached: bool) -> ExitCode:
         # Use upstream hadoop container definition for a build machine
         if is_cached:
@@ -98,8 +102,8 @@ class HadoopBuild(ContainerBuild):
                 -dit
                 {build_image}
         """
-        if HADOOP_BUILD_CONTAINER in Containers.list():
-            log.info(f"Container {HADOOP_BUILD_CONTAINER} already running.")
+        if self.get_container_name() in Containers.list():
+            log.info(f"Container {self.get_container_name()} already running.")
             return 0
         else:
             return cmd.run_with_status(self.app, run_cmd, cwd=self.local_hadoop)
