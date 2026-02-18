@@ -23,6 +23,10 @@ class LocalstackBuild(ContainerBuild):
         return "localstack/localstack"
 
     @override
+    def get_container_name(self, index: int = 0) -> str:
+        return "abd-localstack"
+
+    @override
     def run_container(self, index: int = 0) -> ExitCode:
         if index != 0:
             log.warning("localstack container is single-instance; ignoring index.")
@@ -32,20 +36,22 @@ class LocalstackBuild(ContainerBuild):
               -p 127.0.0.1:4566:4566
               -p 127.0.0.1:4510-4559:4510-4559
               -v /var/run/docker.sock:/var/run/docker.sock
-              --name abd-localstack
+              --name {self.get_container_name(index)}
               --network {self.app.container_network}
               {self.get_image_name()}
         """
 
-        if self.get_image_name() in Containers.list():
-            log.info(f"Container {self.get_image_name()} already running.")
+        containers = Containers.list()
+        name = self.get_container_name(index)
+        if name in containers:
+            log.info(f"Container {name} already running.")
             return 0
         else:
             return cmd.run_with_status(self.app, run_cmd)
 
     def ensure_s3_bucket(self, bucket_name: str = "abd-bucket") -> ExitCode:
         ls_list_cmd = "awslocal s3api list-buckets"
-        list_cmd = f"docker exec abd-localstack bash -c '{ls_list_cmd}'"
+        list_cmd = f"docker exec {self.get_container_name()} bash -c '{ls_list_cmd}'"
         ls_create_cmd = f"awslocal s3api create-bucket --bucket {bucket_name}"
         (err, output) = cmd.run(list_cmd)
         if err != 0:

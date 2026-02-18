@@ -94,6 +94,9 @@ class ContainerBuild(Protocol):
     def get_image_name(self) -> str:
         ...
 
+    def get_container_name(self, index: int = 0) -> str:
+        ...
+
     def build_image(self, is_cached: bool) -> ExitCode:
         log.debug(f"{self.get_image_name()} - Nothing to build.")
         return 0

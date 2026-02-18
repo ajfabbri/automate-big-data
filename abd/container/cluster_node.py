@@ -25,6 +25,10 @@ class ClusterNodeBuild(ContainerBuild):
         return f"cluster-node-{self.user}"
 
     @override
+    def get_container_name(self, index: int = 0) -> str:
+        return f"cluster-node-{index}"
+
+    @override
     def build_image(self, is_cached: bool) -> ExitCode:
         if is_cached:
             images = Containers.list_images()
@@ -39,7 +43,7 @@ class ClusterNodeBuild(ContainerBuild):
 
     @override
     def run_container(self, index: int = 0) -> ExitCode:
-        container_name = f"cluster-node-{index}"
+        container_name = self.get_container_name(index)
         run_cmd = f"""
         docker run --rm=true
             --network {self.app.container_network}
@@ -53,11 +57,12 @@ class ClusterNodeBuild(ContainerBuild):
         else:
             return cmd.run_with_status(self.app, run_cmd, cwd=Project.get_project_root())
 
-    def copy_to_containers(self, local_path: Path) -> ExitCode:
+    def copy_to_containers(self, local_path: Path, container_path: str | None = None) -> ExitCode:
         ret = 0
+        dest_path = container_path if container_path else self.docker_home_dir
         for i in range(self.cfg.hadoop.num_nodes):  # type: ignore
             container_name = f"cluster-node-{i}"
-            c = f"docker cp {local_path} {container_name}:{self.docker_home_dir}"
+            c = f"docker cp {local_path} {container_name}:{dest_path}"
             (ret, output) = cmd.run(c)
             if ret != 0:
                 log.error(f"Failed to copy {local_path} to {container_name}: {output}")
