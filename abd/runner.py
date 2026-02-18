@@ -54,19 +54,29 @@ class Runner:
 
         # 4. Deploy build(s) to node containers
         with tempfile.TemporaryDirectory() as tmpdir:
-            (err, path) = hbuild.fetch_hadoop_build(Path(tmpdir))
+            tmpdir_path = Path(tmpdir)
+            (err, path) = hbuild.fetch_hadoop_build(tmpdir_path)
             if err != 0:
                 return err
             if not path:
                 return 1
-
             ret = nbuild.install_hadoop(path)
             if ret != 0:
                 return ret
 
+            (err, path) = hbuild.fetch_cloudstore_build(tmpdir_path)
+            if err != 0:
+                return err
+            if not path:
+                return 1
+            err = nbuild.copy_to_containers(path)
+            if err != 0:
+                return err
+
         # Copy auth-keys.yml config for s3 (localstack) etc.
         config_path = Project.get_project_root() / "config" / "auth-keys.xml"
-        ret = nbuild.copy_to_containers(config_path)
+        dest_path = "$HOME/hadoop/hadoop-tools/hadoop-aws/src/test/resources/"
+        ret = nbuild.copy_to_containers(config_path, dest_path)
         if ret != 0:
             return ret
 
