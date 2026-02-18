@@ -159,9 +159,11 @@ def do_container_throws(app: App, args: argparse.Namespace):
 def add_interactive_opt(parser: argparse.ArgumentParser):
     parser.add_argument("-i", "--interactive", action="store_true", help="Run in interactive mode")
 
+
 def add_cached_opt(parser: argparse.ArgumentParser):
     parser.add_argument("-c", "--cached", action="store_true",
                         help="Skip updating dependencies / images / build")
+
 
 def main() -> ExitCode:
     # Define CLI args
