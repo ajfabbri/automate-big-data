@@ -109,23 +109,46 @@ class HadoopBuild(ContainerBuild):
             return cmd.run_with_status(self.app, run_cmd, cwd=self.local_hadoop)
 
     def build_in_container(self) -> ExitCode:
+        """ build hadoop common and cloudstore """
         mvn_build = "mvn package -Pdist,native -DskipTests -Dtar -Dmaven.javadoc.skip=true"
         mvn_build += " -Dhadoop-aws-package"
+        # Skip slow BOM generation
+        mvn_build += " -Dcyclonedx.skip=true"
         build_cmd = f"""
         docker exec hadoop-build bash -ilc
         "cd {self.docker_home_dir}/hadoop && {mvn_build}"
         """
-        return cmd.run_with_status(self.app, build_cmd)
+        # err = cmd.run_print(build_cmd)
+        # if err != 0:
+        #     log.error("Failed to build hadoop in container.")
+        #     return err
+        build_cmd = f"""
+        docker exec hadoop-build bash -ilc
+        "cd {self.docker_home_dir}/cloudstore && mvn clean install -DskipTests"
+        """
+        return cmd.run_print(build_cmd)
 
     def find_hadoop_release(self) -> Path | None:
         dist_dir = Path(self.docker_home_dir) / "hadoop" / "hadoop-dist" / "target"
         list_cmd = f"docker exec hadoop-build bash -c 'find {dist_dir} -name hadoop-*.tar.gz'"
         (exit_code, output) = cmd.run(list_cmd)
         paths = [Path(line.strip()) for line in output.splitlines() if line.strip()]
-        # prefers newer veraions, and prefer release builds over -SNAPSHOT builds
+        # prefers newer versions, and prefer release builds over -SNAPSHOT builds
         paths.sort(reverse=True)
         if exit_code != 0 or len(paths) == 0:
             log.error(f"Failed to find hadoop release.. {output}")
+            return None
+        return paths[0]
+
+    def find_cloudstore_release(self) -> Path | None:
+        dist_dir = Path(self.docker_home_dir) / "cloudstore" / "target"
+        list_cmd = f"docker exec hadoop-build bash -c 'find {dist_dir} -name cloudstore-*.jar'"
+        (exit_code, output) = cmd.run(list_cmd)
+        paths = [Path(line.strip()) for line in output.splitlines() if line.strip()]
+        # prefers newer versions
+        paths.sort(reverse=True)
+        if exit_code != 0 or len(paths) == 0:
+            log.error(f"Failed to find cloudstore release.. {output}")
             return None
         return paths[0]
 
@@ -138,5 +161,17 @@ class HadoopBuild(ContainerBuild):
         (ret, _) = cmd.run(c)
         if ret != 0:
             log.error("Failed to copy hadoop release from {HADOOP_BUILD_CONTAINER}.")
+            return (ret, None)
+        return (0, local_dir / path.name)
+
+    def fetch_cloudstore_build(self, local_dir: Path) -> tuple[ExitCode, Path | None]:
+        path = self.find_cloudstore_release()
+        if not path:
+            return (1, None)
+        log.debug(f"Using cloudstore build: {path}")
+        c = f"docker cp hadoop-build:{path} {local_dir}/"
+        (ret, _) = cmd.run(c)
+        if ret != 0:
+            log.error("Failed to copy cloudstore release from {HADOOP_BUILD_CONTAINER}.")
             return (ret, None)
         return (0, local_dir / path.name)

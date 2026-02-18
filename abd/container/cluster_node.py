@@ -60,6 +60,8 @@ class ClusterNodeBuild(ContainerBuild):
     def copy_to_containers(self, local_path: Path, container_path: str | None = None) -> ExitCode:
         ret = 0
         dest_path = container_path if container_path else self.docker_home_dir
+        # substitute $HOME for container's home dir
+        dest_path = dest_path.replace("$HOME", self.docker_home_dir)
         for i in range(self.cfg.hadoop.num_nodes):  # type: ignore
             container_name = f"cluster-node-{i}"
             c = f"docker cp {local_path} {container_name}:{dest_path}"
