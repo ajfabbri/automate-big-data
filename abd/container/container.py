@@ -26,7 +26,7 @@ class Containers:
     @classmethod
     def list_images(cls, name_filter: str | None = None) -> typing.List[str]:  # pyright quirk
         filter_str = f" --filter reference={name_filter}" if name_filter else ""
-        c = f"docker images --format '{{{{.Repository}}}}:{{{{.Tag}}}}' {filter_str}"
+        c = f"docker images --format '{{{{.Repository}}}}' {filter_str}"
         output = cmd.run_throws(c)
         return output.strip().splitlines()
 
@@ -40,9 +40,10 @@ class Containers:
         c = [docker_path,  "exec", "-it", container_name, "bash"]
         return cmd.run_raw(c)
 
-    def stop(self, filter: str = "all") -> ExitCode:
+    @classmethod
+    def stop(cls, filter: str = "all") -> ExitCode:
         filter_str = ""
-        if filter != all and filter != "":
+        if filter and filter != "all":
             filter_str = f"--filter name={filter}"
         log.info(f"Stopping containers with filter: '{filter}'")
         c = f"docker ps -q {filter_str}"
@@ -55,6 +56,20 @@ class Containers:
             log.error(f"Failed to stop containers: {e}")
             return 1
         return 0
+
+    @classmethod
+    def list_networks(cls) -> typing.List[str]:
+        c = "docker network ls --format '{{.Name}}'"
+        output = cmd.run_throws(c)
+        return output.strip().splitlines()
+
+    @classmethod
+    def create_network(cls, net_name: str) -> ExitCode:
+        if net_name in cls.list_networks():
+            log.info(f"Network {net_name} already exists.")
+            return 0
+        c = f"docker network create {net_name}"
+        return cmd.run_print(c)
 
 
 class ContainerBuild(Protocol):
@@ -79,7 +94,7 @@ class ContainerBuild(Protocol):
     def get_image_name(self) -> str:
         ...
 
-    def build_image(self) -> ExitCode:
+    def build_image(self, is_cached: bool) -> ExitCode:
         log.debug(f"{self.get_image_name()} - Nothing to build.")
         return 0
 

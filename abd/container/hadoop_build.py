@@ -33,8 +33,14 @@ class HadoopBuild(ContainerBuild):
         return f"hadoop-build-{self.user}"
 
     @override
-    def build_image(self) -> ExitCode:
+    def build_image(self, is_cached: bool) -> ExitCode:
         # Use upstream hadoop container definition for a build machine
+        if is_cached:
+            images = Containers.list_images()
+            log.debug("Cached images: " + ", ".join(images))
+            if self.get_image_name() in images:
+                log.info(f"cached: Image {self.get_image_name()} exists, skipping build.")
+                return 0
 
         # Build base image
         hadoop_path = Path(self.h_cfg.hadoop_git_path)
@@ -52,6 +58,7 @@ class HadoopBuild(ContainerBuild):
         # build user-specific image
         docker_input = f"""
         FROM hadoop-build
+        RUN apt-get update && apt-get install -y iputils-ping
         RUN rm -f /var/log/faillog /var/log/lastlog
         RUN userdel -r $(getent passwd {self.uid} | cut -d: -f1) 2>/dev/null || :
         RUN groupadd --non-unique -g {self.gid} {self.user}
@@ -83,7 +90,9 @@ class HadoopBuild(ContainerBuild):
                 -v "{self.local_home}/.m2:{self.docker_home_dir}/.m2"
                 -v "{self.local_home}/.gnupg:{self.docker_home_dir}/.gnupg"
                 -u "{self.uid}"
+                --network "{self.app.container_network}"
                 --name "{HADOOP_BUILD_CONTAINER}"
+                -m 16g --oom-kill-disable
                 -dit
                 {build_image}
         """
@@ -94,9 +103,11 @@ class HadoopBuild(ContainerBuild):
             return cmd.run_with_status(self.app, run_cmd, cwd=self.local_hadoop)
 
     def build_in_container(self) -> ExitCode:
+        mvn_build = "mvn package -Pdist,native -DskipTests -Dtar -Dmaven.javadoc.skip=true"
+        mvn_build += " -Dhadoop-aws-package"
         build_cmd = f"""
-        docker exec hadoop-build bash -c
-        "cd {self.docker_home_dir}/hadoop && mvn package -Pdist,native -DskipTests -Dtar"
+        docker exec hadoop-build bash -ilc
+        "cd {self.docker_home_dir}/hadoop && {mvn_build}"
         """
         return cmd.run_with_status(self.app, build_cmd)
 

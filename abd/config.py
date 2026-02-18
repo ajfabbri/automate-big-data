@@ -12,19 +12,20 @@ log = logging.getLogger(__name__)
 DEFAULT_ENABLE_HADOOP = True
 DEFAULT_NUM_NODES = 3
 DEFAULT_HADOOP_PATH = "build/hadoop"
+DEFAULT_HADOOP_REF = "trunk"
 DEFAULT_CLOUDSTORE_PATH = "build/cloudstore"
 DEFAULT_TEST_S3A = True
 
 CLOUDSTORE_GIT_URI = "git@github.com:steveloughran/cloudstore.git"
 CLOUSTORE_GIT_REF = "main"
 HADOOP_GIT_URI = "git@github.com:apache/hadoop.git"
-HADOOP_GIT_REF = "trunk"
 
 
 @dataclass
 class HadoopConfig:
     num_nodes: int = DEFAULT_NUM_NODES
     hadoop_git_path: str = DEFAULT_HADOOP_PATH
+    hadoop_git_ref: str = DEFAULT_HADOOP_REF
     cloudstore_git_path: str = DEFAULT_CLOUDSTORE_PATH
     test_s3a: bool = DEFAULT_TEST_S3A
 
@@ -57,6 +58,7 @@ class Loader:
             hadoop = HadoopConfig(
                 num_nodes=h.get('num_nodes', DEFAULT_NUM_NODES),
                 hadoop_git_path=h.get('hadoop_git_path', ''),
+                hadoop_git_ref=h.get('hadoop_git_ref', ''),
                 cloudstore_git_path=h.get('cloudstore_git_path', ''),
                 test_s3a=h.get('test_s3a', False)
             )
@@ -87,14 +89,17 @@ class Loader:
         if enable_hadoop:
             h_defaults = existing_config.hadoop or HadoopConfig()
             num_nodes = prompt_int("Number of Hadoop nodes", h_defaults.num_nodes)
-            hadoop_git_path = prompt_str("Hadoop git path (empty to fetch latest)",
+            hadoop_git_path = prompt_str("Hadoop git path (will fetch if doesn't exist)",
                                          h_defaults.hadoop_git_path)
+            hadoop_git_ref = prompt_str("Hadoop git ref (HEAD to skip checkout)",
+                                        h_defaults.hadoop_git_ref)
             test_s3a = prompt_bool("Test S3A?", h_defaults.test_s3a)
             cloudstore_git_path = prompt_str("Cloudstore git path (empty to fetch latest)",
                                              h_defaults.cloudstore_git_path)
             hadoop = HadoopConfig(
                 num_nodes=num_nodes,
                 hadoop_git_path=hadoop_git_path,
+                hadoop_git_ref=hadoop_git_ref,
                 cloudstore_git_path=cloudstore_git_path,
                 test_s3a=test_s3a
             )
@@ -125,6 +130,7 @@ class Loader:
             data['hadoop'] = {  # pyright: ignore[reportArgumentType]
                 'num_nodes': config.hadoop.num_nodes,
                 'hadoop_git_path': config.hadoop.hadoop_git_path,
+                'hadoop_git_ref': config.hadoop.hadoop_git_ref,
                 'cloudstore_git_path': config.hadoop.cloudstore_git_path,
                 'test_s3a': config.hadoop.test_s3a
             }

@@ -25,7 +25,12 @@ class ClusterNodeBuild(ContainerBuild):
         return f"cluster-node-{self.user}"
 
     @override
-    def build_image(self) -> ExitCode:
+    def build_image(self, is_cached: bool) -> ExitCode:
+        if is_cached:
+            images = Containers.list_images()
+            if self.get_image_name() in images:
+                log.info(f"cached: Image {self.get_image_name()} exists, skipping build.")
+                return 0
         root = Project.get_project_root()
         dockerfile = root / "Dockerfile.cluster-node"
         img_builder = ImageBuilder(self.get_image_name(), root)
@@ -37,6 +42,7 @@ class ClusterNodeBuild(ContainerBuild):
         container_name = f"cluster-node-{index}"
         run_cmd = f"""
         docker run --rm=true
+            --network {self.app.container_network}
             --name "{container_name}"
             -dit
             {self.get_image_name()}

@@ -5,7 +5,7 @@ import logging
 import sys
 
 from abd.config import CLOUDSTORE_GIT_URI, CLOUSTORE_GIT_REF, Config
-from abd.config import HADOOP_GIT_URI, HADOOP_GIT_REF, Loader
+from abd.config import HADOOP_GIT_URI, Loader
 from pathlib import Path
 
 from abd.container.cluster_node import ClusterNodeBuild
@@ -59,7 +59,7 @@ def do_install(app: App, is_interactive: bool = True) -> Config:
         return cfg
 
     local_hadoop = Path(cfg.hadoop.hadoop_git_path)
-    clone_git(local_hadoop, HADOOP_GIT_URI, HADOOP_GIT_REF, is_interactive)
+    clone_git(local_hadoop, HADOOP_GIT_URI, cfg.hadoop.hadoop_git_ref, is_interactive)
 
     local_cloudstore = Path(cfg.hadoop.cloudstore_git_path)
     clone_git(local_cloudstore, CLOUDSTORE_GIT_URI, CLOUSTORE_GIT_REF, is_interactive)
@@ -96,15 +96,15 @@ def do_test(app: App, args: argparse.Namespace) -> ExitCode:
     return 0
 
 
-def do_build(app: App, cfg: Config) -> ExitCode:
+def do_build(app: App, cfg: Config, is_cached: bool) -> ExitCode:
     """Handle container build command. Returns exit code (0 on success)."""
     h_build = HadoopBuild(app, cfg)
-    err = h_build.build_image()
+    err = h_build.build_image(is_cached)
     if err != 0:
         return err
 
     n_build = ClusterNodeBuild(app, cfg)
-    return n_build.build_image()
+    return n_build.build_image(is_cached)
 
 
 def init_container_cfg(app: App, skip_install: bool, is_interactive: bool = False) -> Config:
@@ -146,7 +146,7 @@ def do_container_throws(app: App, args: argparse.Namespace):
     is_cached = args.cached if args.cached else False
     containers = Containers(app, cfg)
     if args.container_cmd == "build":
-        return do_build(app, cfg)
+        return do_build(app, cfg, is_cached)
     elif args.container_cmd == "list":
         print(containers.list(args.name))
     elif args.container_cmd == "run":
@@ -163,6 +163,9 @@ def do_container_throws(app: App, args: argparse.Namespace):
 def add_interactive_opt(parser: argparse.ArgumentParser):
     parser.add_argument("-i", "--interactive", action="store_true", help="Run in interactive mode")
 
+def add_cached_opt(parser: argparse.ArgumentParser):
+    parser.add_argument("-c", "--cached", action="store_true",
+                        help="Skip updating dependencies / images / build")
 
 def main() -> ExitCode:
     # Define CLI args
@@ -178,15 +181,15 @@ def main() -> ExitCode:
     add_interactive_opt(install_p)
     container_p = subparsers.add_parser("container", help="Container commands")
     container_p.add_argument("-n", "--name", help="container name / filter")
-    container_p.add_argument("-c", "--cached", action="store_true",
-                             help="Skip updating dependencies / images / build")
     container_sub = container_p.add_subparsers(dest="container_cmd", required=True)
     c_build_p = container_sub.add_parser("build", help="Build containers")
+    add_interactive_opt(c_build_p)
+    add_cached_opt(c_build_p)
     _ = container_sub.add_parser("list", help="List containers")
-    _ = container_sub.add_parser("run", help="Run container(s)")
+    c_run_p = container_sub.add_parser("run", help="Run container(s)")
+    add_cached_opt(c_run_p)
     _ = container_sub.add_parser("stop", help="Stop container(s)")
     _ = container_sub.add_parser("attach", help="Attach to a running container")
-    add_interactive_opt(c_build_p)
 
     # Parse args and configure logging
     args = parser.parse_args()

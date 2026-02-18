@@ -1,5 +1,8 @@
 [hadoop]
 hadoop_git_path = "build/hadoop"
+# If not set, will use "trunk".
+# Use "HEAD" to use current checked out version of existing repository.
+hadoop_git_ref = "HEAD"
 cloudstore_git_path = "build/cloudstore"
 num_nodes = 3
 test_s3a = true

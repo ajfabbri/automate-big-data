@@ -5,6 +5,7 @@ import logging
 
 from abd.config import Config
 from abd.container.cluster_node import ClusterNodeBuild
+from abd.container.container import Containers
 from abd.container.hadoop_build import HadoopBuild
 from abd.container.localstack import LocalstackBuild
 from abd.context import App
@@ -21,7 +22,12 @@ class Runner:
 
     def run_all(self, is_cached: bool) -> ExitCode:
         # Initial stab:
-        # 1. start hadoop build container
+        # create network for containers
+        ret = Containers.create_network(self.app.container_network)
+        if ret != 0:
+            log.error("Failed to create container network.")
+            return ret
+        # Start hadoop build container
         if not self.cfg.hadoop:
             log.error("Hadoop not enabled in config, cannot run containers.")
             return 1
@@ -29,11 +35,11 @@ class Runner:
         hbuild = HadoopBuild(self.app, self.cfg)
         # local_cloudstore = Path(self.cfg.hadoop.cloudstore_git_path)
 
-        if not is_cached:
-            ret = hbuild.run_container()
-            if ret != 0:
-                return ret
+        ret = hbuild.run_container()
+        if ret != 0:
+            return ret
 
+        if not is_cached:
             # 2. run build script in container
             ret = hbuild.build_in_container()
             if ret != 0:
@@ -58,9 +64,10 @@ class Runner:
             if ret != 0:
                 return ret
 
-        # Start localstack
+        # Start localstack, create s3 bucket
         ls_build = LocalstackBuild(self.app, self.cfg)
         ls_build.run_container()
+        ls_build.ensure_s3_bucket("abd-bucket")
 
         # Run tests in node containers
         return 0

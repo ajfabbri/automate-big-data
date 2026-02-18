@@ -11,3 +11,4 @@ class App:
         self.sysinfo = sysinfo
         # TODO make rich output optional?
         self.console = Console(color_system='256')
+        self.container_network = "abd-network"

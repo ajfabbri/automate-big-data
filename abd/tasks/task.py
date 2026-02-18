@@ -51,7 +51,8 @@ class Task(Protocol):
         results = {c.name: 0 for c in containers}
         for command in self.get_commands():
             for container in containers:
-                docker_cmd = f"docker exec {container.name} bash -c '{command}'"
+                # use -il for interactive login shell to pick up PATH etc.
+                docker_cmd = f"docker exec {container.name} bash -ilc '{command}'"
                 ret = cmd.run_print(docker_cmd, log_prefix=container.name,
                                     quiet_failure=self.quiet_failure())
                 if ret != 0:
