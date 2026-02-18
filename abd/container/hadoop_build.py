@@ -26,6 +26,7 @@ class HadoopBuild(ContainerBuild):
         else:
             raise Exception("Hadoop config is required for HadoopBuild.")
         self.local_hadoop = Path(self.h_cfg.hadoop_git_path).resolve(strict=True)
+        self.local_cloudstore = Path(self.h_cfg.cloudstore_git_path).resolve(strict=True)
 
     @override
     def get_image_name(self) -> str:
@@ -86,6 +87,7 @@ class HadoopBuild(ContainerBuild):
         run_cmd = f"""
         docker run --rm=true
                 -v "{self.local_hadoop}:{self.docker_home_dir}/hadoop"
+                -v "{self.local_cloudstore}:{self.docker_home_dir}/cloudstore"
                 -w "{self.docker_home_dir}/hadoop"
                 -v "{self.local_home}/.m2:{self.docker_home_dir}/.m2"
                 -v "{self.local_home}/.gnupg:{self.docker_home_dir}/.gnupg"
