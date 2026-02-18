@@ -9,7 +9,7 @@ from abd.container.container import Containers
 from abd.container.hadoop_build import HadoopBuild
 from abd.container.localstack import LocalstackBuild
 from abd.context import App
-from abd.project import ExitCode
+from abd.project import ExitCode, Project
 
 log = logging.getLogger(__name__)
 
@@ -60,9 +60,15 @@ class Runner:
             if not path:
                 return 1
 
-            ret = nbuild.copy_to_containers(path)
+            ret = nbuild.install_hadoop(path)
             if ret != 0:
                 return ret
+
+        # Copy auth-keys.yml config for s3 (localstack) etc.
+        config_path = Project.get_project_root() / "config" / "auth-keys.xml"
+        ret = nbuild.copy_to_containers(config_path)
+        if ret != 0:
+            return ret
 
         # Start localstack, create s3 bucket
         ls_build = LocalstackBuild(self.app, self.cfg)
