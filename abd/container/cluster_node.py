@@ -62,6 +62,13 @@ class ClusterNodeBuild(ContainerBuild):
             if ret != 0:
                 log.error(f"Failed to copy {local_path} to {container_name}: {output}")
                 return ret
+        return 0
+
+    def install_hadoop(self, local_path: Path):
+        ret = self.copy_to_containers(local_path)
+
+        for i in range(self.cfg.hadoop.num_nodes):  # type: ignore
+            container_name = f"cluster-node-{i}"
             c = f"""
             docker exec {container_name} bash -c
             'cd {self.docker_home_dir} &&
@@ -73,4 +80,3 @@ class ClusterNodeBuild(ContainerBuild):
                 return ret
             log.info(f"✅ Extracted {local_path.name} to {container_name}")
         return 0
-
