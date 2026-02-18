@@ -132,18 +132,14 @@ def do_container(app: App, args: argparse.Namespace) -> ExitCode:
 def do_container_throws(app: App, args: argparse.Namespace):
     """Handle container subcommands. Return exit code (0 for success)."""
 
-    if args.container_cmd != "build":
-        skip_config_install = True
-    else:
-        skip_config_install = args.cached if args.cached else False
-
+    is_cached = args.cached if hasattr(args, 'cached') else False
+    skip_config_install = is_cached if args.container_cmd != "build" else True
     interactive = args.interactive if args.container_cmd == "build" else False
     cfg = init_container_cfg(app, skip_config_install, is_interactive=interactive)
     if not cfg.hadoop:
         print("Hadoop not enabled in config, skipping.")
         return
 
-    is_cached = args.cached if args.cached else False
     containers = Containers(app, cfg)
     if args.container_cmd == "build":
         return do_build(app, cfg, is_cached)
