@@ -6,6 +6,8 @@ Goal: To enable fast testing of open-source storage and analytics stacks.
 Bonus points for being able to test cloud storage integrations locally with
 emulated services.
 
+Note: this is an **early development prototype.**
+
 ## Current Functionality
 
 - Create a build container with all the dependencies needed to build releases

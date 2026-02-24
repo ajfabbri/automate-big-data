@@ -1,7 +1,10 @@
+import logging
 import unittest
 
-from abd.config import Loader, Config
+from abd.config import BuildType, Loader, Config
 from pathlib import Path
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 class TestConfigLoader(unittest.TestCase):
@@ -16,9 +19,11 @@ class TestConfigLoader(unittest.TestCase):
         config: Config | None = loader.load(Path("abd", "abd.toml.example"))
         if config is None:
             self.fail("Expected config to be loaded, got None")
-        hadoop_config = config.hadoop
+        hadoop_config = config.get_build_cfg(BuildType.HADOOP)
         if hadoop_config is None:
             self.fail("Expected hadoop_config to be loaded, got None")
-        self.assertEqual(hadoop_config.hadoop_git_path, "build/hadoop")
-        self.assertEqual(hadoop_config.cloudstore_git_path, "build/cloudstore")
-        self.assertTrue(hadoop_config.test_s3a)
+        self.assertEqual(hadoop_config.git_path, "build/hadoop")
+        cloudstore_config = config.get_build_cfg(BuildType.CLOUDSTORE)
+        if cloudstore_config is None:
+            self.fail("Expected cloudstore_config to be loaded, got None")
+        self.assertEqual(cloudstore_config.git_path, "build/cloudstore")

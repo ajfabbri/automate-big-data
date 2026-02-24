@@ -4,13 +4,13 @@ import argparse
 import logging
 import sys
 
-from abd.config import CLOUDSTORE_GIT_URI, CLOUSTORE_GIT_REF, Config
+from abd.builder.hadoop import HadoopBuild
+from abd.config import CLOUDSTORE_GIT_URI, CLOUSTORE_GIT_REF, BuildType, Config
 from abd.config import HADOOP_GIT_URI, Loader
 from pathlib import Path
 
 from abd.container.cluster_node import ClusterNodeBuild
 from abd.container.container import Containers
-from abd.container.hadoop_build import HadoopBuild
 from abd.context import App
 from abd.project import ExitCode
 from abd.runner import Runner
@@ -46,22 +46,20 @@ def do_install(app: App, is_interactive: bool = True) -> Config:
     """ Check config and install local clones of git repos. """
 
     cfg = do_config(is_interactive)
-    if not cfg.hadoop:
+    h_config = cfg.get_build_cfg(BuildType.HADOOP)
+    c_config = cfg.get_build_cfg(BuildType.CLOUDSTORE)
+    if not h_config:
         print("Hadoop not enabled in config, skipping install.")
         return cfg
 
-    if not cfg.hadoop.hadoop_git_path:
-        print("Hadoop git path not set in config, skipping install.")
-        return cfg
-
-    if not cfg.hadoop.cloudstore_git_path:
+    if not (c_config and c_config.git_path):
         print("Cloudstore git path not set in config, skipping install.")
         return cfg
 
-    local_hadoop = Path(cfg.hadoop.hadoop_git_path)
-    clone_git(local_hadoop, HADOOP_GIT_URI, cfg.hadoop.hadoop_git_ref, is_interactive)
+    local_hadoop = Path(h_config.git_path)
+    clone_git(local_hadoop, HADOOP_GIT_URI, h_config.get_git_ref(), is_interactive)
 
-    local_cloudstore = Path(cfg.hadoop.cloudstore_git_path)
+    local_cloudstore = Path(c_config.git_path)
     clone_git(local_cloudstore, CLOUDSTORE_GIT_URI, CLOUSTORE_GIT_REF, is_interactive)
     return cfg
 
@@ -69,11 +67,14 @@ def do_install(app: App, is_interactive: bool = True) -> Config:
 def do_test(app: App, args: argparse.Namespace) -> ExitCode:
     cfg = init_container_cfg(app, skip_install=True)
     nodes = set(Container(cname) for cname in Containers.list("cluster-node"))
-    if not cfg.hadoop:
+    c_hadoop = cfg.get_build_cfg(BuildType.HADOOP)
+    if not c_hadoop:
         log.error("Hadoop not enabled in config, cannot run tests.")
         return 1
-    if len(nodes) != cfg.hadoop.num_nodes:
-        log.error(f"Expected {cfg.hadoop.num_nodes} nodes, found {len(nodes)}.")
+    d_nodes_cfg = cfg.get_deploy_cfg("cluster-node")
+    n = d_nodes_cfg.num_nodes if d_nodes_cfg else 0
+    if len(nodes) != n:
+        log.error(f"Expected {n} nodes, found {len(nodes)}.")
         log.info(f"Found nodes: {nodes}")
 
     # sanity check error propagation
@@ -136,7 +137,7 @@ def do_container_throws(app: App, args: argparse.Namespace):
     skip_config_install = is_cached if args.container_cmd != "build" else True
     interactive = args.interactive if args.container_cmd == "build" else False
     cfg = init_container_cfg(app, skip_config_install, is_interactive=interactive)
-    if not cfg.hadoop:
+    if not cfg.get_build_cfg(BuildType.HADOOP):
         print("Hadoop not enabled in config, skipping.")
         return
 

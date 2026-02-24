@@ -2,9 +2,9 @@ import logging
 from pathlib import Path
 from typing import override
 
+from abd.builder.image import ImageBuilder
 import abd.command as cmd
-from abd.config import Config
-from abd.container.builder import ImageBuilder
+from abd.config import BuildType, Config
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App
 from abd.project import ExitCode, Project
@@ -19,6 +19,9 @@ class ClusterNodeBuild(ContainerBuild):
     def __init__(self, app: App, cfg: Config):
         super().__init__(app, cfg)
         self.docker_home_dir = f"/home/{self.CONTAINER_USERNAME}"
+        self.deploy_cfg = cfg.get_deploy_cfg("cluster-node")
+        self.hadoop_cfg = cfg.get_build_cfg(BuildType.HADOOP)
+        self.cloudstore_cfg = cfg.get_build_cfg(BuildType.CLOUDSTORE)
 
     @override
     def get_image_name(self) -> str:
@@ -62,7 +65,7 @@ class ClusterNodeBuild(ContainerBuild):
         dest_path = container_path if container_path else self.docker_home_dir
         # substitute $HOME for container's home dir
         dest_path = dest_path.replace("$HOME", self.docker_home_dir)
-        for i in range(self.cfg.hadoop.num_nodes):  # type: ignore
+        for i in range(self.deploy_cfg.num_nodes):  # type: ignore
             container_name = f"cluster-node-{i}"
             c = f"docker cp {local_path} {container_name}:{dest_path}"
             (ret, output) = cmd.run(c)
@@ -74,7 +77,7 @@ class ClusterNodeBuild(ContainerBuild):
     def install_hadoop(self, local_path: Path):
         ret = self.copy_to_containers(local_path)
 
-        for i in range(self.cfg.hadoop.num_nodes):  # type: ignore
+        for i in range(self.deploy_cfg.num_nodes):  # type: ignore
             container_name = f"cluster-node-{i}"
             c = f"""
             docker exec {container_name} bash -c
