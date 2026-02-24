@@ -1,0 +1,48 @@
+<configuration>
+  <!-- LOCALSTACK config -->
+  <property>
+    <name>test.fs.s3a.name</name>
+    <value>s3a://abd-bucket/</value>
+  </property>
+  <property>
+    <name>fs.contract.test.fs.s3a</name>
+    <value>${test.fs.s3a.name}</value>
+  </property>
+  <property>
+    <name>fs.s3a.endpoint</name>
+    <value>http://abd-localstack:4566</value>
+  </property>
+  <property>
+    <name>fs.s3a.endpoint.region</name>
+    <value>us-west-2</value>
+  </property>
+  <property>
+    <name>fs.s3a.bucket.abd-bucket.connection.ssl.enabled</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>fs.s3a.bucket.abd-bucket.path.style.access</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>fs.s3a.bucket.abd-bucket.access.key</name>
+    <value>test</value> <!-- LocalStack default access key -->
+  </property>
+  <property>
+    <name>fs.s3a.bucket.abd-bucket.secret.key</name>
+    <value>test</value> <!-- LocalStack default secret key -->
+  </property>
+  <property>
+    <!-- causes CORS failures with localstack by deafult -->
+    <name>fs.s3a.bucket.abd-bucket.audit.enabled</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>fs.s3a.bucket.abd-bucket.aws.credentials.provider</name>
+    <value>org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider</value>
+  </property>
+  <property>
+    <name>fs.s3a.scale.test.timeout</name>
+    <value>3600</value>
+  </property>
+</configuration>
