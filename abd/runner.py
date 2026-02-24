@@ -3,11 +3,11 @@ from pathlib import Path
 import tempfile
 import logging
 
-from abd.config import Config
+from abd.builder.hadoop import HadoopBuild
+from abd.container.localstack import LocalstackBuild
+from abd.config import Config, BuildType
 from abd.container.cluster_node import ClusterNodeBuild
 from abd.container.container import Containers
-from abd.container.hadoop_build import HadoopBuild
-from abd.container.localstack import LocalstackBuild
 from abd.context import App
 from abd.project import ExitCode, Project
 
@@ -19,21 +19,27 @@ class Runner:
     def __init__(self, app: App, cfg: Config):
         self.app = app
         self.cfg = cfg
+        h_cfg = self.cfg.get_build_cfg(BuildType.HADOOP)
+        if h_cfg:
+            self.h_cfg = h_cfg
+        else:
+            raise RuntimeError("Hadoop not enabled in config, cannot run containers.")
+        self.c_cfg = self.cfg.get_build_cfg(BuildType.CLOUDSTORE)
+        node_deploy = cfg.get_deploy_cfg("cluster-node")
+        if node_deploy:
+            self.node_deploy = node_deploy
+        else:
+            raise RuntimeError("cluster-node deploy config not found, cannot run containers.")
 
     def run_all(self, is_cached: bool) -> ExitCode:
-        # Initial stab:
+        # Start hadoop build container
         # create network for containers
         ret = Containers.create_network(self.app.container_network)
         if ret != 0:
             log.error("Failed to create container network.")
             return ret
-        # Start hadoop build container
-        if not self.cfg.hadoop:
-            log.error("Hadoop not enabled in config, cannot run containers.")
-            return 1
 
         hbuild = HadoopBuild(self.app, self.cfg)
-        # local_cloudstore = Path(self.cfg.hadoop.cloudstore_git_path)
 
         ret = hbuild.run_container()
         if ret != 0:
@@ -47,7 +53,7 @@ class Runner:
 
         # 3. start hadoop node containers
         nbuild = ClusterNodeBuild(self.app, self.cfg)
-        for i in range(self.cfg.hadoop.num_nodes):
+        for i in range(self.node_deploy.num_nodes):
             ret = nbuild.run_container(i)
             if ret != 0:
                 return ret
@@ -75,7 +81,7 @@ class Runner:
 
         # Copy auth-keys.yml config for s3 (localstack) etc.
         config_path = Project.get_project_root() / "config" / "auth-keys.xml"
-        dest_path = "$HOME/hadoop/hadoop-tools/hadoop-aws/src/test/resources/"
+        dest_path = "$HOME"
         ret = nbuild.copy_to_containers(config_path, dest_path)
         if ret != 0:
             return ret

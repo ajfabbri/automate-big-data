@@ -1,9 +1,9 @@
 from pathlib import Path
 import logging
 from typing import override
-from abd.config import Config
+from abd.builder.image import ImageBuilder
+from abd.config import BuildType, Config
 import abd.command as cmd
-from abd.container.builder import ImageBuilder
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App
 from abd.project import ExitCode
@@ -21,12 +21,16 @@ class HadoopBuild(ContainerBuild):
     @override
     def __init__(self, app: App, cfg: Config):
         super().__init__(app, cfg)
-        if cfg.hadoop:
-            self.h_cfg = cfg.hadoop
+        hcfg = cfg.get_build_cfg(BuildType.HADOOP)
+        ccfg = cfg.get_build_cfg(BuildType.CLOUDSTORE)
+        if hcfg:
+            self.h_cfg = hcfg
+            self.local_hadoop = Path(self.h_cfg.git_path).absolute()
+            if ccfg:
+                self.c_cfg = ccfg
+                self.local_cloudstore = Path(self.c_cfg.git_path).absolute()
         else:
             raise Exception("Hadoop config is required for HadoopBuild.")
-        self.local_hadoop = Path(self.h_cfg.hadoop_git_path).resolve(strict=True)
-        self.local_cloudstore = Path(self.h_cfg.cloudstore_git_path).resolve(strict=True)
 
     @override
     def get_image_name(self) -> str:
@@ -48,7 +52,7 @@ class HadoopBuild(ContainerBuild):
                 return 0
 
         # Build base image
-        hadoop_path = Path(self.h_cfg.hadoop_git_path)
+        hadoop_path = Path(self.h_cfg.git_path)
         if self.app.sysinfo.get_cpu_arch() in ["arm64", "aarch64"]:
             docker_file = HADOOP_BASE_DOCKERFILE_ARM
         else:
