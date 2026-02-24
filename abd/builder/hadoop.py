@@ -74,6 +74,7 @@ class HadoopBuild(ContainerBuild):
         RUN useradd -g {self.gid} -u {self.uid} -k /root -m {self.user} -d "/home/{self.user}"
         RUN echo "{self.user} ALL=NOPASSWD: ALL" > "/etc/sudoers.d/hadoop-build-{self.uid}"
         ENV HOME="/home/{self.user}"
+        ENV MAVEN_OPTS="-Xms256m -Xmx8g"
         """
         u_builder = ImageBuilder(self.get_image_name(), base_dockerfile.parent)
         return u_builder.build_input(docker_input)
