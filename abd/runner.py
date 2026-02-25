@@ -5,7 +5,7 @@ import logging
 
 from abd.builder.hadoop import HadoopBuild
 from abd.container.localstack import LocalstackBuild
-from abd.config import Config, BuildType
+from abd.config.raw import Config, BuildType
 from abd.container.cluster_node import ClusterNodeBuild
 from abd.container.container import Containers
 from abd.context import App

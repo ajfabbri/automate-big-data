@@ -2,7 +2,7 @@ from pathlib import Path
 import logging
 from typing import override
 from abd.builder.image import ImageBuilder
-from abd.config import BuildType, Config
+from abd.config.raw import BuildType, Config
 import abd.command as cmd
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App

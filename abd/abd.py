@@ -5,8 +5,8 @@ import logging
 import sys
 
 from abd.builder.hadoop import HadoopBuild
-from abd.config import CLOUDSTORE_GIT_URI, CLOUSTORE_GIT_REF, BuildType, Config
-from abd.config import HADOOP_GIT_URI, Loader
+from abd.config.raw import CLOUDSTORE_GIT_URI, CLOUSTORE_GIT_REF, BuildType, Config
+from abd.config.raw import HADOOP_GIT_URI, Loader
 from pathlib import Path
 
 from abd.container.cluster_node import ClusterNodeBuild
@@ -134,26 +134,26 @@ def do_container_throws(app: App, args: argparse.Namespace):
     """Handle container subcommands. Return exit code (0 for success)."""
 
     is_cached = args.cached if hasattr(args, 'cached') else False
-    skip_config_install = is_cached if args.container_cmd != "build" else True
-    interactive = args.interactive if args.container_cmd == "build" else False
+    skip_config_install = is_cached if args.host_cmd != "build" else True
+    interactive = args.interactive if args.host_cmd == "build" else False
     cfg = init_container_cfg(app, skip_config_install, is_interactive=interactive)
     if not cfg.get_build_cfg(BuildType.HADOOP):
         print("Hadoop not enabled in config, skipping.")
         return
 
     containers = Containers(app, cfg)
-    if args.container_cmd == "build":
+    if args.host_cmd == "build":
         return do_build(app, cfg, is_cached)
-    elif args.container_cmd == "list":
+    elif args.host_cmd == "list":
         print(containers.list(args.name))
-    elif args.container_cmd == "run":
+    elif args.host_cmd == "run":
         Runner(app, cfg).run_all(is_cached)
-    elif args.container_cmd == "stop":
+    elif args.host_cmd == "stop":
         containers.stop(args.name)
-    elif args.container_cmd == "attach":
+    elif args.host_cmd == "attach":
         containers.attach(args.name)
     else:
-        e = f"Unknown container command: {args.container_cmd}"
+        e = f"Unknown container command: {args.host_cmd}"
         raise Exception(e)
 
 
@@ -172,23 +172,21 @@ def main() -> ExitCode:
                                      description="abd: automate big data CLI tool.")
     parser.add_argument("-v", "--verbose", action="count", default=0)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    config_p = subparsers.add_parser("config", help="Configure settings")
+    config_p = subparsers.add_parser("config", help="Settings and config generation.")
     add_interactive_opt(config_p)
-    _ = subparsers.add_parser("test", help="Run tests")
-    _ = subparsers.add_parser("check", help="Run checks")
-    install_p = subparsers.add_parser("install", help="Install dependencies")
+    install_p = subparsers.add_parser("build", help="Build software and images")
     add_interactive_opt(install_p)
-    container_p = subparsers.add_parser("container", help="Container commands")
-    container_p.add_argument("-n", "--name", help="container name / filter")
-    container_sub = container_p.add_subparsers(dest="container_cmd", required=True)
-    c_build_p = container_sub.add_parser("build", help="Build containers")
+    host_p = subparsers.add_parser("host", help="Node / container commands")
+    host_p.add_argument("-n", "--name", help="host / container name filter")
+    host_sub = host_p.add_subparsers(dest="host_cmd", required=True)
+    c_build_p = host_sub.add_parser("build", help="Build containers")
     add_interactive_opt(c_build_p)
     add_cached_opt(c_build_p)
-    _ = container_sub.add_parser("list", help="List containers")
-    c_run_p = container_sub.add_parser("run", help="Run container(s)")
+    _ = host_sub.add_parser("list", help="List containers")
+    c_run_p = host_sub.add_parser("run", help="Run container(s)")
     add_cached_opt(c_run_p)
-    _ = container_sub.add_parser("stop", help="Stop container(s)")
-    _ = container_sub.add_parser("attach", help="Attach to a running container")
+    _ = host_sub.add_parser("stop", help="Stop container / host(s)")
+    _ = host_sub.add_parser("attach", help="Attach to a running host / container")
 
     # Parse args and configure logging
     args = parser.parse_args()

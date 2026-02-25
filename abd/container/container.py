@@ -4,7 +4,7 @@ from typing import Protocol
 import typing
 
 import abd.command as cmd
-from abd.config import Config
+from abd.config.raw import Config
 from abd.context import App
 from abd.project import ExitCode
 log = logging.getLogger(__name__)

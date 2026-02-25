@@ -17,6 +17,10 @@ Note: this is an **early development prototype.**
 
 - Running tests which exercise Hadoop Common features and integrations.
 
+### Roadmap
+
+- Apache Spark deploy and test.
+
 ## Getting Started
 
 The `abd` command-line tool provides commands for building and deploying
@@ -42,6 +46,31 @@ abd --help
 ### Running ABD Commands
 
 See the [dist-readme.md](dist-readme.md) doc for more detail.
+
+## How It Works
+
+The automation scripting works in phases:
+
+### 1. Configure
+
+The configure phase is where you choose which software you want to run, where
+you want to run it, etc.. This phase also generates inputs for the following
+phases (e.g. Docker files, ansible stuff, etc.).
+
+### 2. Build
+
+The build phase downloads and/or builds any of the selected software to prepare
+for deployment and execution. Note that this phase may execute its own _deploy_
+and _execute_ tasks, for example to create a container used as a build host.
+
+### 3. Deploy
+
+The deploy phase spawns and configures containers and/or VMs as needed.
+
+### 4. Execute
+
+Execute phase is where tasks are run, which are typically tests used to
+validate releases or patches.
 
 ## Supported Software
 
