@@ -26,6 +26,10 @@ HADOOP_GIT_URI = "git@github.com:apache/hadoop.git"
 type Primitive = str | int | bool | list | dict
 type PrimitiveDict = Dict[str, str | int | bool | list | dict]
 
+#
+# Raw type definitions for (de)serialization to TOML
+#
+
 
 class BuildType(StrEnum):
     HADOOP = "hadoop"

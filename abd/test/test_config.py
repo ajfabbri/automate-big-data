@@ -1,7 +1,7 @@
 import logging
 import unittest
 
-from abd.config import BuildType, Loader, Config
+from abd.config.raw import BuildType, Loader, Config
 from pathlib import Path
 
 logging.basicConfig(level=logging.DEBUG)

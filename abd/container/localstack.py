@@ -1,7 +1,7 @@
 import json
 import logging
 from typing import override
-from abd.config import Config
+from abd.config.raw import Config
 import abd.command as cmd
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App

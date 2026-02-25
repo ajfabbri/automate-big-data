@@ -4,7 +4,7 @@ from typing import override
 
 from abd.builder.image import ImageBuilder
 import abd.command as cmd
-from abd.config import BuildType, Config
+from abd.config.raw import BuildType, Config
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App
 from abd.project import ExitCode, Project
