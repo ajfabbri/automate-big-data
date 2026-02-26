@@ -162,31 +162,37 @@ def add_interactive_opt(parser: argparse.ArgumentParser):
 
 
 def add_cached_opt(parser: argparse.ArgumentParser):
-    parser.add_argument("-c", "--cached", action="store_true",
+    parser.add_argument("-c", "--cached", type=str, default="",
                         help="Skip updating dependencies / images / build")
+
+
+def add_name_opt(parser: argparse.ArgumentParser):
+    parser.add_argument("-n", "--name", help="name filter")
 
 
 def main() -> ExitCode:
     # Define CLI args
     parser = argparse.ArgumentParser(prog="abd",
                                      description="abd: automate big data CLI tool.")
+    # global options
     parser.add_argument("-v", "--verbose", action="count", default=0)
     subparsers = parser.add_subparsers(dest="command", required=True)
+    # config command
     config_p = subparsers.add_parser("config", help="Settings and config generation.")
     add_interactive_opt(config_p)
-    install_p = subparsers.add_parser("build", help="Build software and images")
-    add_interactive_opt(install_p)
-    host_p = subparsers.add_parser("host", help="Node / container commands")
-    host_p.add_argument("-n", "--name", help="host / container name filter")
-    host_sub = host_p.add_subparsers(dest="host_cmd", required=True)
-    c_build_p = host_sub.add_parser("build", help="Build containers")
-    add_interactive_opt(c_build_p)
-    add_cached_opt(c_build_p)
-    _ = host_sub.add_parser("list", help="List containers")
-    c_run_p = host_sub.add_parser("run", help="Run container(s)")
-    add_cached_opt(c_run_p)
-    _ = host_sub.add_parser("stop", help="Stop container / host(s)")
-    _ = host_sub.add_parser("attach", help="Attach to a running host / container")
+    # build
+    build_p = subparsers.add_parser("build", help="Build software and images")
+    add_interactive_opt(build_p)
+    add_cached_opt(build_p)
+    # deploy
+    deploy_p = subparsers.add_parser("deploy", help="Deploy / provision / install.")
+    deploy_sub = deploy_p.add_subparsers(dest="deploy_cmd", required=True)
+    _ = deploy_sub.add_parser("list", help="List deployment (hosts, etc.)")
+    d_run_p = deploy_sub.add_parser("run", help="Run deployment")
+    add_cached_opt(d_run_p)
+    add_interactive_opt(d_run_p)
+    _ = deploy_sub.add_parser("stop", help="Stop container / host(s)")
+    _ = deploy_sub.add_parser("attach", help="Attach to a running host / container")
 
     # Parse args and configure logging
     args = parser.parse_args()

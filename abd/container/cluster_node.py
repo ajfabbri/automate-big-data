@@ -1,12 +1,14 @@
 import logging
 from pathlib import Path
-from typing import override
+from typing import Set, override
 
+from abd.builder.hadoop import HadoopBuild
 from abd.builder.image import ImageBuilder
 import abd.command as cmd
 from abd.config.raw import BuildType, Config
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App
+from abd.job.phases import Task, TaskId, PhaseType
 from abd.project import ExitCode, Project
 
 log = logging.getLogger(__name__)
@@ -16,8 +18,9 @@ class ClusterNodeBuild(ContainerBuild):
     CONTAINER_USERNAME = "hadoop"
 
     @override
-    def __init__(self, app: App, cfg: Config):
-        super().__init__(app, cfg)
+    def __init__(self, app: App):
+        super().__init__(app)
+        cfg = app.get_config()
         self.docker_home_dir = f"/home/{self.CONTAINER_USERNAME}"
         self.deploy_cfg = cfg.get_deploy_cfg("cluster-node")
         self.hadoop_cfg = cfg.get_build_cfg(BuildType.HADOOP)
@@ -90,3 +93,34 @@ class ClusterNodeBuild(ContainerBuild):
                 return ret
             log.info(f"✅ Extracted {local_path.name} to {container_name}")
         return 0
+
+    class NodeBuildTask(Task):
+        phase_id = TaskId("cluster-node", PhaseType.BUILD)
+
+        @override
+        def dependencies(self) -> Set[TaskId]:
+            # XXX TODO? return {HadoopBuild.HadoopBuildTask.phase_id}
+            return set()
+
+        @override
+        def run(self, arg: App, is_cached: bool):
+            nbuild = ClusterNodeBuild(arg)
+            err = nbuild.build_image(is_cached)
+            # TODO make up mind on where exceptions versus error codes live
+            if err != 0:
+                raise RuntimeError("Failed to build cluster node image.")
+
+    class NodeDeployTask(Task):
+        phase_id = TaskId("cluster-node", PhaseType.DEPLOY)
+
+        @override
+        def dependencies(self) -> Set[TaskId]:
+            # XXX TODO cloudstore and hadoop dependencies
+            return {ClusterNodeBuild.NodeBuildTask.phase_id}
+
+        @override
+        def run(self, arg: App, is_cached: bool):
+            nbuild = ClusterNodeBuild(arg)
+            err = nbuild.run_container()
+            if err != 0:
+                raise RuntimeError("Failed to run cluster node container.")

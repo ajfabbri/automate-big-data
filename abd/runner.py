@@ -1,7 +1,9 @@
 
+from dataclasses import dataclass
 from pathlib import Path
 import tempfile
 import logging
+from typing import Set
 
 from abd.builder.hadoop import HadoopBuild
 from abd.container.localstack import LocalstackBuild
@@ -9,9 +11,53 @@ from abd.config.raw import Config, BuildType
 from abd.container.cluster_node import ClusterNodeBuild
 from abd.container.container import Containers
 from abd.context import App
+from abd.job.job import Job
+from abd.job.phases import TaskId, PhaseType
 from abd.project import ExitCode, Project
 
 log = logging.getLogger(__name__)
+
+@dataclass
+class ExecutionPlan:
+    children: dict[TaskId, set[TaskId]]  # things that depend on a phase
+    parents: dict[TaskId, set[TaskId]]   # things that a phase depends on
+
+    def __init__(self, job: Job):
+        self.job = job
+        for c_id, c_phase in job.get_tasks().items():
+            self.parents[c_id] = c_phase.dependencies()
+            for p_id in self.parents[c_id]:
+                if p_id not in self.children:
+                    self.children[p_id] = set()
+                self.children[p_id].add(c_id)
+        return self
+
+    def tasks_in_phase(self, phase_type: PhaseType, phase_name: str | None) -> set[TaskId]:
+        for task_id in self.children.keys():
+            task = self.job.get_tasks()[task_id]
+            if task.phase_type == phase_type and (not phase_name or task.phase_name == phase_name):
+            return task_id
+
+
+
+class NewRunner:
+    """ Top-level execution of Jobs. """
+    def __init__(self, app: App):
+        self.app = app
+        self.cfg = app.get_config()
+        self.job = Job()
+
+
+
+    def run(self, phase: PhaseType, is_dryrun: bool, is_cached: bool,
+            phase_name: str | None = None) -> ExitCode:
+
+        plan = ExecutionPlan(self.job)
+
+
+
+
+
 
 
 class Runner:
