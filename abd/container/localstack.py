@@ -5,6 +5,7 @@ from abd.config.raw import Config
 import abd.command as cmd
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App
+from abd.job.phases import Task, TaskId, PhaseType
 from abd.project import ExitCode
 
 log = logging.getLogger(__name__)
@@ -14,8 +15,8 @@ class LocalstackBuild(ContainerBuild):
     """ Support for localstack container. """
 
     @override
-    def __init__(self, app: App, cfg: Config):
-        super().__init__(app, cfg)
+    def __init__(self, app: App):
+        super().__init__(app)
         # TODO
 
     @override
@@ -69,3 +70,15 @@ class LocalstackBuild(ContainerBuild):
         else:
             log.info(f"Created bucket {bucket_name} in localstack.")
         return 0
+
+
+class LocalstackTask(Task):
+    phase_id = TaskId("localstack", PhaseType.DEPLOY)
+
+    def __init__(self):
+        pass
+
+    @override
+    def run(self, arg: App, is_cached: bool):   # pyright: ignore[reportUnusedParameter]
+        localstack = LocalstackBuild(arg)
+        localstack.run_container()

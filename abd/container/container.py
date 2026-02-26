@@ -6,6 +6,7 @@ import typing
 import abd.command as cmd
 from abd.config.raw import Config
 from abd.context import App
+from abd.job.phases import Phase
 from abd.project import ExitCode
 log = logging.getLogger(__name__)
 
@@ -82,9 +83,9 @@ class ContainerBuild(Protocol):
     docker_home_dir: str
     local_home: Path
 
-    def __init__(self, app: App, cfg: Config):
-        self.cfg = cfg
+    def __init__(self, app: App):
         self.app = app
+        self.cfg = app.get_config()
         self.user = app.sysinfo.get_user()
         self.uid = app.sysinfo.get_uid()
         self.gid = app.sysinfo.get_gid()

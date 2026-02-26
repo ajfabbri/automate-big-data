@@ -1,11 +1,12 @@
 from pathlib import Path
 import logging
-from typing import override
+from typing import Set, override
 from abd.builder.image import ImageBuilder
 from abd.config.raw import BuildType, Config
 import abd.command as cmd
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App
+from abd.job.phases import Task, TaskId, PhaseType
 from abd.project import ExitCode
 
 log = logging.getLogger(__name__)
@@ -19,8 +20,9 @@ class HadoopBuild(ContainerBuild):
     """ Support for building a container to build hadoop in. """
 
     @override
-    def __init__(self, app: App, cfg: Config):
-        super().__init__(app, cfg)
+    def __init__(self, app: App):
+        cfg = app.get_config()
+        super().__init__(app)
         hcfg = cfg.get_build_cfg(BuildType.HADOOP)
         ccfg = cfg.get_build_cfg(BuildType.CLOUDSTORE)
         if hcfg:
@@ -180,3 +182,34 @@ class HadoopBuild(ContainerBuild):
             log.error("Failed to copy cloudstore release from {HADOOP_BUILD_CONTAINER}.")
             return (ret, None)
         return (0, local_dir / path.name)
+
+
+class HadoopBuildImageTask(Task):
+    phase_id = TaskId("hadoop-build", PhaseType.BUILD)
+
+    @override
+    def dependencies(self) -> Set[TaskId]:
+        deps = [TaskId("git-hadoop", PhaseType.BUILD)]
+        return set(deps)
+
+    @override
+    def run(self, arg: App, is_cached: bool):
+        builder = HadoopBuild(arg)
+        err = builder.build_image(is_cached)
+        if err != 0:
+            raise RuntimeError("Failed to build hadoop build image.")
+
+
+class DeployHadoopBuildContainer(Task):
+    phase_id = TaskId("hadoop-build", PhaseType.DEPLOY)
+
+    @override
+    def dependencies(self) -> Set[TaskId]:
+        return {HadoopBuildImageTask.phase_id}
+
+    @override
+    def run(self, arg: App, is_cached: bool):
+        builder = HadoopBuild(arg)
+        err = builder.run_container()
+        if err != 0:
+            raise RuntimeError("Failed to run hadoop build container.")
