@@ -2,7 +2,6 @@ import logging
 from typing import List, override
 
 from abd.builder.hadoop import InstallHadoop
-from abd.container.cluster_node import NodeDeployTask
 from abd.context import App
 from abd.executions.script import Script
 from abd.job.phases import PhaseType, Task, TaskId

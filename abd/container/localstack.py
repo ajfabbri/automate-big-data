@@ -78,6 +78,6 @@ class LocalstackTask(Task):
         pass
 
     @override
-    def run(self, arg: App, is_cached: bool, is_dryrun: bool):   # pyright: ignore[reportUnusedParameter]
+    def run(self, arg: App, is_cached: bool, is_dryrun: bool):
         localstack = LocalstackBuild(arg)
         localstack.run_container(is_dryrun)

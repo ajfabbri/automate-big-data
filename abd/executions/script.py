@@ -1,7 +1,7 @@
 
 from dataclasses import dataclass
 import logging
-from typing import Dict, Iterable, List, Protocol, Set, Tuple
+from typing import Dict, Iterable, List, Protocol, Tuple
 
 from abd.host import Host
 from abd.project import ExitCode, camel_to_snake
