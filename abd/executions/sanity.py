@@ -1,11 +1,11 @@
 import logging
 from typing import override
-from abd.tasks.task import Task
+from abd.executions.script import Script
 
 log = logging.getLogger(__name__)
 
 
-class FailingTask(Task):
+class FailingTask(Script):
     """Example of a failing task used to test error code propagation."""
 
     @override

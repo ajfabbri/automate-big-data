@@ -17,6 +17,10 @@ class Project:
         """Get the root directory of the project."""
         return Path(__file__).parent.parent
 
+    @staticmethod
+    def get_build_dir() -> Path:
+        return Project.get_project_root() / "build"
+
 
 def camel_to_snake(name: str) -> str:
     """Convert a CamelCase string to snake_case."""

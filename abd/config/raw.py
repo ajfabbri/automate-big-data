@@ -7,16 +7,13 @@ import tomllib
 import tomli_w
 import logging
 from abd.project import Project
-from abd.ui import prompt_bool, prompt_int, prompt_str
+from abd.ui import Ui
 
 log = logging.getLogger(__name__)
 
-DEFAULT_ENABLE_HADOOP = True
 DEFAULT_NUM_NODES = 3
 DEFAULT_HADOOP_PATH = "build/hadoop"
 DEFAULT_HADOOP_REF = "trunk"
-DEFAULT_CLOUDSTORE_PATH = "build/cloudstore"
-DEFAULT_TEST_S3A = True
 
 CLOUDSTORE_GIT_URI = "git@github.com:steveloughran/cloudstore.git"
 CLOUSTORE_GIT_REF = "main"
@@ -203,7 +200,7 @@ class Loader:
             raise FileNotFoundError(f"Config template not found: {self.CONF_TEMPLATE}")
         return config
 
-    def create_interactive(self) -> Config:
+    def create_interactive(self, ui: Ui) -> Config:
         """Edit or create a new configuration, interactively."""
 
         # check for existing config
@@ -211,28 +208,28 @@ class Loader:
         if existing_config:
             print("Existing configuration found:")
             print(existing_config)
-            if not prompt_bool("Do you want to edit existing config?", False):
+            if not ui.prompt_bool("Do you want to edit existing config?", False):
                 return existing_config
         else:
             existing_config = self.load_template_or_throw()
 
         existing_hadoop_cfg = existing_config.get_build_cfg(BuildType.HADOOP)
         existing_cloudstore_cfg = existing_config.get_build_cfg(BuildType.CLOUDSTORE)
-        enable_hadoop = prompt_bool("Enable Hadoop?", existing_hadoop_cfg is not None)
+        enable_hadoop = ui.prompt_bool("Enable Hadoop?", existing_hadoop_cfg is not None)
         builds: dict[str, BuildCfg] = {}
         deploys: dict[str, DeployCfg] = {}
         if enable_hadoop:
             h_defaults = existing_hadoop_cfg or HadoopCfg.get_default()
             c_defaults = existing_cloudstore_cfg or CloudstoreCfg.get_default()
-            num_nodes = prompt_int("Number of Hadoop nodes", DEFAULT_NUM_NODES)
-            hadoop_git_path = prompt_str("Hadoop git path (will fetch if doesn't exist)",
-                                         h_defaults.git_path)
-            hadoop_git_ref = prompt_str("Hadoop git ref (HEAD to skip checkout)",
-                                        h_defaults.git_ref)
-            cloudstore_git_path = prompt_str("Cloudstore git path (empty to fetch latest)",
-                                             c_defaults.git_path)
-            cloudstore_git_ref = prompt_str("Cloudstore git ref (HEAD to skip checkout)",
-                                            c_defaults.git_ref)
+            num_nodes = ui.prompt_int("Number of Hadoop nodes", DEFAULT_NUM_NODES)
+            hadoop_git_path = ui.prompt_str("Hadoop git path (will fetch if doesn't exist)",
+                                            h_defaults.git_path)
+            hadoop_git_ref = ui.prompt_str("Hadoop git ref (HEAD to skip checkout)",
+                                           h_defaults.git_ref)
+            cloudstore_git_path = ui.prompt_str("Cloudstore git path (empty to fetch latest)",
+                                                c_defaults.git_path)
+            cloudstore_git_ref = ui.prompt_str("Cloudstore git ref (HEAD to skip checkout)",
+                                               c_defaults.git_ref)
             builds[BuildType.HADOOP] = HadoopCfg(git_path=hadoop_git_path, git_ref=hadoop_git_ref)
             builds[BuildType.CLOUDSTORE] = CloudstoreCfg(git_path=cloudstore_git_path,
                                                          git_ref=cloudstore_git_ref)
@@ -242,7 +239,7 @@ class Loader:
                                                  Install(BuildType.CLOUDSTORE, "/home/hadoop")])
         cfg = Config(build=builds, deploy=deploys)
 
-        want_save = prompt_bool("Save this configuration?", True)
+        want_save = ui.prompt_bool("Save this configuration?", True)
         if want_save:
             self.save(cfg)
         return cfg
@@ -259,9 +256,9 @@ class Loader:
             config = self.load_template_or_throw()
         return config
 
-    def create(self, is_interactive: bool) -> Config:
+    def create(self, is_interactive: bool, ui: Ui) -> Config:
         if is_interactive:
-            return self.create_interactive()
+            return self.create_interactive(ui)
         else:
             return self.ensure_exists()
 

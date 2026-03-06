@@ -1,7 +1,6 @@
 import json
 import logging
 from typing import override
-from abd.config.raw import Config
 import abd.command as cmd
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App
@@ -28,7 +27,7 @@ class LocalstackBuild(ContainerBuild):
         return "abd-localstack"
 
     @override
-    def run_container(self, index: int = 0) -> ExitCode:
+    def run_container(self, is_dryrun: bool, index: int = 0) -> ExitCode:
         if index != 0:
             log.warning("localstack container is single-instance; ignoring index.")
 
@@ -48,7 +47,7 @@ class LocalstackBuild(ContainerBuild):
             log.info(f"Container {name} already running.")
             return 0
         else:
-            return cmd.run_with_status(self.app, run_cmd)
+            return cmd.run_print(run_cmd, is_dryrun=is_dryrun)
 
     def ensure_s3_bucket(self, bucket_name: str = "abd-bucket") -> ExitCode:
         ls_list_cmd = "awslocal s3api list-buckets"
@@ -79,6 +78,6 @@ class LocalstackTask(Task):
         pass
 
     @override
-    def run(self, arg: App, is_cached: bool):   # pyright: ignore[reportUnusedParameter]
+    def run(self, arg: App, is_cached: bool, is_dryrun: bool):   # pyright: ignore[reportUnusedParameter]
         localstack = LocalstackBuild(arg)
-        localstack.run_container()
+        localstack.run_container(is_dryrun)

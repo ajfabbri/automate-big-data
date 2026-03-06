@@ -9,8 +9,8 @@ from subprocess import Popen
 import sys
 import time
 
-from abd.context import App
 from abd.project import CmdResult, ExitCode
+from abd.ui import Ui
 
 log = logging.getLogger(__name__)
 
@@ -28,9 +28,12 @@ def run_throws(cmd: str, cwd: Path | None = None, input: str = "") -> str:
     return output
 
 
-def run(cmd: str, cwd: Path | None = None, input: str = "") -> CmdResult:
+def run(cmd: str, cwd: Path | None = None, input: str = "", is_dryrun: bool = False) -> CmdResult:
     """ Run a command and capture its output. """
     cmd = _join_lines(cmd)
+    if is_dryrun:
+        print(f"[DRY RUN] {cmd} (cwd={cwd})")
+        return CmdResult(exit_code=0, std_out="")
     log.info(f"-> {cmd} (cwd={cwd})")
     result = subprocess.run(cmd, shell=True, input=input, text=True, capture_output=True, cwd=cwd)
     if result.returncode != 0:
@@ -46,10 +49,14 @@ def run_raw(cmd: list[str], cwd: Path | None = None) -> ExitCode:
     return result.returncode
 
 
-def run_print(cmd: str, cwd: Path | None = None, log_prefix="", quiet_failure=False) -> ExitCode:
+def run_print(cmd: str, cwd: Path | None = None, log_prefix="", quiet_failure=False,
+              is_dryrun: bool = False) -> ExitCode:
     """ Run a command and stream its output to the console. """
     cmd = _join_lines(cmd)
     p = f"[{log_prefix}] " if log_prefix else ""
+    if is_dryrun:
+        print(f"{p}[DRY RUN] {cmd} (cwd={cwd})")
+        return 0
     log.info(f"{p}-> {cmd} (cwd={cwd})")
     with Popen(cmd, shell=True, text=True, cwd=cwd, stdout=subprocess.PIPE,
                stderr=subprocess.STDOUT) as proc:
@@ -65,13 +72,16 @@ def run_print(cmd: str, cwd: Path | None = None, log_prefix="", quiet_failure=Fa
         return ret
 
 
-def run_with_status(app: App, cmd: str, cwd: Path | None = None) -> ExitCode:
+def run_with_status(ui: Ui, cmd: str, cwd: Path | None = None,
+                    is_dryrun: bool = False) -> ExitCode:
     """ Use Rich to run a command and display its output in a live-updating
     panel, along with a status line showing the elapsed time. """
+    if is_dryrun:
+        return run_print(cmd, cwd, is_dryrun=is_dryrun)
     cmd = _join_lines(cmd)
     output_lines = []
     start = time.time()
-    console_height = app.console.size.height
+    console_height = 40  # app.console.size.height
     output_rows = console_height - 1
     layout = Layout()
     layout.split(
