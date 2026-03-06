@@ -134,7 +134,7 @@ def main() -> ExitCode:
     add_dryrun_opt(exec_p)
 
     # tasks
-    _tasks_p = subparsers.add_parser("tasks", help="Show registered tasks.")
+    _ = subparsers.add_parser("tasks", help="Show registered tasks.")
 
     # init main app context
     _ = task_registry.init()

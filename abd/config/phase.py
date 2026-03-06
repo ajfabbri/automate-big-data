@@ -1,5 +1,4 @@
 
-from types import NoneType
 from typing import override
 from abd.config.raw import Loader
 from abd.context import App
@@ -13,7 +12,7 @@ class ConfigTask(Task):
         self.config = None
 
     @override
-    def run(self, arg: App, is_cached: bool, is_dryrun: bool):  # pyright: ignore[reportUnusedParameter]
+    def run(self, arg: App, is_cached: bool, is_dryrun: bool):
         # for now, just ensure we can load config
         if not arg.try_get_config():
             arg.config = Loader().ensure_exists()
