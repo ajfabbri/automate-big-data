@@ -1,5 +1,7 @@
 # automate-big-data
 
+_A faster dev loop for open-source distributed data platforms._
+
 Testing and automation for open-source big data frameworks.
 
 Goal: To enable fast testing of open-source storage and analytics stacks.
@@ -20,6 +22,8 @@ Note: this is an **early development prototype.**
 ### Roadmap
 
 - Apache Spark deploy and test.
+- Consider Hive, HBase, Impala, Iceberg, etc. (they depend on Hadoop Common
+  library).
 
 ## Getting Started
 
@@ -49,19 +53,24 @@ See the [dist-readme.md](dist-readme.md) doc for more detail.
 
 ## How It Works
 
-The automation scripting works in phases:
+The automation scripting works in phases. The work is split into tasks. Each
+task has an ID `<phase>:<task-name>`. Tasks can depend on each other, and the
+tool runs them in parallel according to those dependencies.
+
+E.g. `build:cluster-node` is a task in the `build` phase that creates container
+images for the main worker nodes that will be tested. Running that task or
+phase will first run any that it depends on, and so on.
 
 ### 1. Configure
 
 The configure phase is where you choose which software you want to run, where
 you want to run it, etc.. This phase also generates inputs for the following
-phases (e.g. Docker files, ansible stuff, etc.).
+phases (e.g. Docker files, ansible? , etc.).
 
 ### 2. Build
 
 The build phase downloads and/or builds any of the selected software to prepare
-for deployment and execution. Note that this phase may execute its own _deploy_
-and _execute_ tasks, for example to create a container used as a build host.
+for deployment and execution.
 
 ### 3. Deploy
 

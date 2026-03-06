@@ -2,12 +2,12 @@ import logging
 from pathlib import Path
 from typing import Set, override
 
-from abd.builder.hadoop import HadoopBuild
 from abd.builder.image import ImageBuilder
 import abd.command as cmd
-from abd.config.raw import BuildType, Config
+from abd.config.raw import BuildType
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App
+from abd.host import Container
 from abd.job.phases import Task, TaskId, PhaseType
 from abd.project import ExitCode, Project
 
@@ -35,7 +35,7 @@ class ClusterNodeBuild(ContainerBuild):
         return f"cluster-node-{index}"
 
     @override
-    def build_image(self, is_cached: bool) -> ExitCode:
+    def build_image(self, is_cached: bool, is_dryrun: bool) -> ExitCode:
         if is_cached:
             images = Containers.list_images()
             if self.get_image_name() in images:
@@ -43,12 +43,12 @@ class ClusterNodeBuild(ContainerBuild):
                 return 0
         root = Project.get_project_root()
         dockerfile = root / "Dockerfile.cluster-node"
-        img_builder = ImageBuilder(self.get_image_name(), root)
-        return img_builder.build_dockerfile(dockerfile,
-                                            [f"USERNAME={self.CONTAINER_USERNAME}"])
+        ibuild = ImageBuilder(self.get_image_name(), root)
+        return ibuild.build_dockerfile(dockerfile, is_dryrun,
+                                       [f"USERNAME={self.CONTAINER_USERNAME}"])
 
     @override
-    def run_container(self, index: int = 0) -> ExitCode:
+    def run_container(self, is_dryrun: bool, index: int = 0) -> ExitCode:
         container_name = self.get_container_name(index)
         run_cmd = f"""
         docker run --rm=true
@@ -57,11 +57,15 @@ class ClusterNodeBuild(ContainerBuild):
             -dit
             {self.get_image_name()}
         """
+        ret = 0
         if container_name in Containers.list():
             log.info(f"Container {container_name} already running.")
-            return 0
         else:
-            return cmd.run_with_status(self.app, run_cmd, cwd=Project.get_project_root())
+            ret = cmd.run_print(run_cmd, cwd=Project.get_project_root())
+        if ret == 0:
+            # TODO return running host instead of mutating app context directly?
+            self.app.hosts.add(Container(container_name))
+        return ret
 
     def copy_to_containers(self, local_path: Path, container_path: str | None = None) -> ExitCode:
         ret = 0
@@ -77,50 +81,72 @@ class ClusterNodeBuild(ContainerBuild):
                 return ret
         return 0
 
+    def check_hadoop_install(self) -> bool:
+        any_missing = False
+        for i in range(self.deploy_cfg.num_nodes):  # type: ignore
+            host = self.get_container_name(i)
+            c = f"""
+            docker exec {host} bash -c
+            'if [ ! -f /opt/hadoop/bin/hadoop ]; then exit 1; fi'
+            """
+            (ret, _) = cmd.run(c)
+            if ret != 0:
+                any_missing = True
+                log.debug(f"check_hadoop_install({host}) -> False")
+        return not any_missing
+
     def install_hadoop(self, local_path: Path):
         ret = self.copy_to_containers(local_path)
 
         for i in range(self.deploy_cfg.num_nodes):  # type: ignore
-            container_name = f"cluster-node-{i}"
+            host = self.get_container_name(i)
             c = f"""
-            docker exec {container_name} bash -c
+            docker exec {host} bash -c
             'cd {self.docker_home_dir} &&
              tar -xzf {local_path.name} --strip-components=1 -C /opt/hadoop'
             """
             (ret, output) = cmd.run(c)
             if ret != 0:
-                log.error(f"Failed to extract hadoop in {container_name}: {output}")
+                log.error(f"Failed to extract hadoop in {host}: {output}")
                 return ret
-            log.info(f"✅ Extracted {local_path.name} to {container_name}")
+            log.info(f"✅ Extracted {local_path.name} to {host}")
         return 0
 
-    class NodeBuildTask(Task):
-        phase_id = TaskId("cluster-node", PhaseType.BUILD)
 
-        @override
-        def dependencies(self) -> Set[TaskId]:
-            # XXX TODO? return {HadoopBuild.HadoopBuildTask.phase_id}
-            return set()
+class NodeBuildTask(Task):
+    phase_id = TaskId("cluster-node", PhaseType.BUILD)
 
-        @override
-        def run(self, arg: App, is_cached: bool):
-            nbuild = ClusterNodeBuild(arg)
-            err = nbuild.build_image(is_cached)
-            # TODO make up mind on where exceptions versus error codes live
-            if err != 0:
-                raise RuntimeError("Failed to build cluster node image.")
+    @override
+    def dependencies(self) -> Set[TaskId]:
+        # XXX TODO? return {HadoopBuild.HadoopBuildTask.phase_id}
+        return set()
 
-    class NodeDeployTask(Task):
-        phase_id = TaskId("cluster-node", PhaseType.DEPLOY)
+    @override
+    def run(self, arg: App, is_cached: bool, is_dryrun: bool):
+        nbuild = ClusterNodeBuild(arg)
+        err = nbuild.build_image(is_cached, is_dryrun)
+        # TODO make up mind on where exceptions versus error codes live
+        if err != 0:
+            raise RuntimeError("Failed to build cluster node image.")
 
-        @override
-        def dependencies(self) -> Set[TaskId]:
-            # XXX TODO cloudstore and hadoop dependencies
-            return {ClusterNodeBuild.NodeBuildTask.phase_id}
 
-        @override
-        def run(self, arg: App, is_cached: bool):
-            nbuild = ClusterNodeBuild(arg)
-            err = nbuild.run_container()
-            if err != 0:
+class NodeDeployTask(Task):
+    phase_id = TaskId("start-cluster-nodes", PhaseType.DEPLOY)
+
+    @override
+    def dependencies(self) -> Set[TaskId]:
+        # XXX TODO cloudstore and hadoop dependencies
+        return {NodeBuildTask.phase_id}
+
+    @override
+    def run(self, arg: App, is_cached: bool, is_dryrun: bool):
+        nbuild = ClusterNodeBuild(arg)
+        node_deploy = arg.get_config().get_deploy_cfg("cluster-node")
+        if node_deploy:
+            self.node_deploy = node_deploy
+        else:
+            raise RuntimeError("cluster-node deploy config not found, cannot run containers.")
+        for i in range(node_deploy.num_nodes):
+            ret = nbuild.run_container(is_dryrun, i)
+            if ret != 0:
                 raise RuntimeError("Failed to run cluster node container.")

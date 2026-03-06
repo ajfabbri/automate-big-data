@@ -6,7 +6,6 @@ import typing
 import abd.command as cmd
 from abd.config.raw import Config
 from abd.context import App
-from abd.job.phases import Phase
 from abd.project import ExitCode
 log = logging.getLogger(__name__)
 
@@ -42,11 +41,11 @@ class Containers:
         return cmd.run_raw(c)
 
     @classmethod
-    def stop(cls, filter: str = "all") -> ExitCode:
+    def stop(cls, name_filter: str | None) -> ExitCode:
         filter_str = ""
-        if filter and filter != "all":
-            filter_str = f"--filter name={filter}"
-        log.info(f"Stopping containers with filter: '{filter}'")
+        if name_filter:
+            filter_str = f"--filter name={name_filter}"
+        log.info(f"Stopping containers with filter: '{filter_str}'")
         c = f"docker ps -q {filter_str}"
         try:
             output = cmd.run_throws(c)
@@ -98,9 +97,9 @@ class ContainerBuild(Protocol):
     def get_container_name(self, index: int = 0) -> str:
         ...
 
-    def build_image(self, is_cached: bool) -> ExitCode:
+    def build_image(self, is_cached: bool, is_dryrun: bool) -> ExitCode:
         log.debug(f"{self.get_image_name()} - Nothing to build.")
         return 0
 
-    def run_container(self, index: int = 0) -> ExitCode:
+    def run_container(self, is_dryrun: bool, index: int = 0) -> ExitCode:
         ...

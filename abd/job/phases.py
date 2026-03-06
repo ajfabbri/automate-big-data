@@ -1,9 +1,11 @@
 
 from dataclasses import dataclass
 from enum import auto, StrEnum
+from pathlib import Path
 from typing import ClassVar, Protocol, Set
 
 from abd.context import App
+from abd.project import Project
 
 
 class PhaseType(StrEnum):
@@ -13,10 +15,13 @@ class PhaseType(StrEnum):
     EXECUTE = auto()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=True)
 class TaskId:
     name: str
     phase_type: PhaseType
+
+    def __str__(self):
+        return f"{self.phase_type}:{self.name}"
 
 
 class Task[T: App](Protocol):
@@ -30,11 +35,15 @@ class Task[T: App](Protocol):
         """ Return list of phases this depends on. Default: no dependencies """
         return set()
 
-    def run(self, arg: T, is_cached: bool):
+    # TODO remove is_cached, is_dryrun?
+    def run(self, arg: T, is_cached: bool, is_dryrun: bool):
         """ Run this phase, skipping generating existing assets when `is_cached` is set.
             Throws on failure.
         """
         ...
+
+    def get_output_dir(self) -> Path:
+        return Project.get_build_dir() / f"{self.phase_id}"
 
     def __str__(self):
         return f"{self.phase_id.phase_type}:{self.phase_id.name}"

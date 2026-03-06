@@ -2,6 +2,7 @@
 from types import NoneType
 from typing import override
 from abd.config.raw import Loader
+from abd.context import App
 from abd.job.phases import Task, TaskId, PhaseType
 
 
@@ -12,6 +13,8 @@ class ConfigTask(Task):
         self.config = None
 
     @override
-    def run(self, arg: NoneType, is_cached: bool):  # pyright: ignore[reportUnusedParameter]
+    def run(self, arg: App, is_cached: bool, is_dryrun: bool):  # pyright: ignore[reportUnusedParameter]
         # for now, just ensure we can load config
-        self.config = Loader().ensure_exists()
+        if not arg.try_get_config():
+            arg.config = Loader().ensure_exists()
+        self.config = arg.get_config()
