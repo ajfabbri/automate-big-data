@@ -73,7 +73,7 @@ class ExecutionPlan:
         return in_degree
 
     def run_parallel(self, phase: PhaseType, execute_fn: Callable[[Task], None],
-                     task_name: str | None = None, max_threads: int = 4):
+                     task_name: str | None = None, max_threads: int = 4) -> ExitCode:
         # Only include tasks required for target phase
         targets = self._tasks_in_phase(phase, task_name)
         needed = self._collect_needed(targets)
@@ -143,6 +143,7 @@ class ExecutionPlan:
                 except Exception as e:
                     log.error(f"[thread {idx}] raised an exception: {e}")
                     has_error = True
+        return 1 if has_error else 0
 
 
 class NewRunner:
@@ -158,6 +159,4 @@ class NewRunner:
             log.info(f"Executing task: {task.phase_id}")
             task.run(self.app, self.app.args.is_cached, self.app.args.is_dryrun)
 
-        plan.run_parallel(phase, execute, task_name=task_name)
-
-        return 0
+        return plan.run_parallel(phase, execute, task_name=task_name)
