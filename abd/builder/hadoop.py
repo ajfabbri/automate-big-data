@@ -322,11 +322,11 @@ class InstallHadoop(Task):
                 log.info(f"[cache hit] existing cloudstore jar {path} on cluster nodes.")
                 return
 
-            (err, path) = h_build.fetch_cloudstore_build(Project.get_build_dir(), is_dryrun)
-            if err == 0 and path:
-                err = n_build.copy_to_containers(path, is_dryrun=is_dryrun)
-                if err != 0:
-                    raise RuntimeError("Failed to copy cloudstore jar to cluster nodes.")
+        (err, path) = h_build.fetch_cloudstore_build(Project.get_build_dir(), is_dryrun)
+        if err == 0 and path:
+            err = n_build.copy_to_containers(path, is_dryrun=is_dryrun)
+            if err != 0:
+                raise RuntimeError("Failed to copy cloudstore jar to cluster nodes.")
 
     def _patch_config(self, app: App, is_dryrun: bool):
         n_build = ClusterNodeBuild(app)
