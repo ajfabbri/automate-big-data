@@ -48,7 +48,7 @@ class Script(Protocol):
                 if is_dryrun:
                     log.info(f"[DRY RUN] {host.get_name()}: {command}")
                     continue
-                ret = host.run_command(command,  quiet_failure=self.quiet_failure())
+                (ret, _) = host.run_command(command,  quiet_failure=self.quiet_failure())
                 if ret != 0:
                     results[host.get_name()] = ret
                     return results

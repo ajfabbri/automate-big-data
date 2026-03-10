@@ -1,22 +1,15 @@
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from pathlib import Path
-import tempfile
 import logging
 from queue import SimpleQueue, Empty
 from threading import Lock
 from typing import Callable, MutableMapping
 
-from abd.builder.hadoop import HadoopBuild
 from abd.config.phase import ConfigTask
-from abd.container.localstack import LocalstackBuild
-from abd.config.raw import Config, BuildType
-from abd.container.cluster_node import ClusterNodeBuild
-from abd.container.container import Containers
 from abd.context import App
 from abd.job.job import Job
 from abd.job.phases import Task, TaskId, PhaseType
-from abd.project import ExitCode, Project
+from abd.project import ExitCode
 
 log = logging.getLogger(__name__)
 
@@ -79,10 +72,10 @@ class ExecutionPlan:
             in_degree[t] = sum(1 for p in self.parents[t] if p in needed)
         return in_degree
 
-    def run_parallel(self, phase: PhaseType,
-                     execute_fn: Callable[[Task], None], max_threads: int = 4):
+    def run_parallel(self, phase: PhaseType, execute_fn: Callable[[Task], None],
+                     task_name: str | None = None, max_threads: int = 4):
         # Only include tasks required for target phase
-        targets = self._tasks_in_phase(phase, None)
+        targets = self._tasks_in_phase(phase, task_name)
         needed = self._collect_needed(targets)
         log.debug(f"{len(needed)} tasks needed for phase {phase} w/ {len(targets)} targets")
         # Calculate number of dependencies remaining for each task
@@ -99,6 +92,7 @@ class ExecutionPlan:
                 log.debug(f"Task {t} has {in_degree[t]} dependencies, not ready yet.")
 
         lock = Lock()
+        has_error = False
 
         def get_num_waiters() -> int:
             with lock:
@@ -114,6 +108,9 @@ class ExecutionPlan:
                 except Empty:
                     if get_num_waiters() == 0:
                         log.debug(f"Worker {idx} finished.")
+                        return
+                    elif has_error:
+                        log.debug(f"Worker {idx} exiting early due to error.")
                         return
                     else:
                         continue
@@ -133,15 +130,19 @@ class ExecutionPlan:
                             num_waiters -= 1
 
         # Start worker threads
-        futures: list[Future] = []
         with ThreadPoolExecutor(max_workers=max_threads) as pool:
-            for idx in range(max_threads):
-                futures.append(pool.submit(worker, idx))
-            for (i, f) in enumerate(futures):
-                # no return yet, but propagate exceptions
-                log.debug(f"( o)( o) Waiting for worker {i} to finish.")
-                f.result()
-                log.debug(f"         done: worker {i}")
+            workers = range(max_threads)
+            future_to_worker = {pool.submit(worker, idx): idx for idx in workers}
+            for future in as_completed(future_to_worker):
+                idx = future_to_worker[future]
+                try:
+                    # no return yet, but propagate exceptions
+                    log.debug(f"( o)( o) Waiting for worker {idx} to finish.")
+                    future.result()
+                    log.debug(f"         done: worker {idx}")
+                except Exception as e:
+                    log.error(f"[thread {idx}] raised an exception: {e}")
+                    has_error = True
 
 
 class NewRunner:
@@ -150,97 +151,13 @@ class NewRunner:
         self.app = app
         self.job = Job()
 
-    def run(self, phase: PhaseType, phase_name: str | None = None) -> ExitCode:
-
-        if phase_name:
-            raise NotImplementedError("TODO Run by task name not implemented yet")
+    def run(self, phase: PhaseType, task_name: str | None = None) -> ExitCode:
         plan = ExecutionPlan(self.job)
 
         def execute(task: Task):
             log.info(f"Executing task: {task.phase_id}")
             task.run(self.app, self.app.args.is_cached, self.app.args.is_dryrun)
 
-        plan.run_parallel(phase, execute)
+        plan.run_parallel(phase, execute, task_name=task_name)
 
-        return 0
-
-
-class Runner:
-    """ Running tasks on cluster nodes. """
-    def __init__(self, app: App, cfg: Config):
-        self.app = app
-        self.cfg = cfg
-        h_cfg = self.cfg.get_build_cfg(BuildType.HADOOP)
-        if h_cfg:
-            self.h_cfg = h_cfg
-        else:
-            raise RuntimeError("Hadoop not enabled in config, cannot run containers.")
-        self.c_cfg = self.cfg.get_build_cfg(BuildType.CLOUDSTORE)
-        node_deploy = cfg.get_deploy_cfg("cluster-node")
-        if node_deploy:
-            self.node_deploy = node_deploy
-        else:
-            raise RuntimeError("cluster-node deploy config not found, cannot run containers.")
-
-    def run_all(self, is_cached: bool) -> ExitCode:
-        # Start hadoop build container
-        # create network for containers
-        ret = Containers.create_network(self.app.container_network)
-        if ret != 0:
-            log.error("Failed to create container network.")
-            return ret
-
-        hbuild = HadoopBuild(self.app)
-
-        ret = hbuild.run_container(False)
-        if ret != 0:
-            return ret
-
-        if not is_cached:
-            # 2. run build script in container
-            ret = hbuild.build_in_container(False, False)
-            if ret != 0:
-                return ret
-
-        # 3. start hadoop node containers
-        nbuild = ClusterNodeBuild(self.app)
-        for i in range(self.node_deploy.num_nodes):
-            ret = nbuild.run_container(False)
-            if ret != 0:
-                return ret
-
-        # 4. Deploy build(s) to node containers
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir_path = Path(tmpdir)
-            (err, path) = hbuild.fetch_hadoop_build(tmpdir_path)
-            if err != 0:
-                return err
-            if not path:
-                return 1
-            ret = nbuild.install_hadoop(path)
-            if ret != 0:
-                return ret
-
-            (err, path) = hbuild.fetch_cloudstore_build(tmpdir_path)
-            if err != 0:
-                return err
-            if not path:
-                return 1
-            err = nbuild.copy_to_containers(path)
-            if err != 0:
-                return err
-
-        # Copy auth-keys.yml config for s3 (localstack) etc.
-        config_path = Project.get_project_root() / "config" / "auth-keys.xml"
-        dest_path = "$HOME"
-        ret = nbuild.copy_to_containers(config_path, dest_path)
-        if ret != 0:
-            return ret
-
-        # Start localstack, create s3 bucket
-        ls_build = LocalstackBuild(self.app)
-        ls_build.run_container(False)
-        ls_build.ensure_s3_bucket("abd-bucket")
-
-        # Run tests in node containers
         return 0

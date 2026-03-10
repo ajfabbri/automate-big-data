@@ -9,13 +9,14 @@ from abd.container.container import ContainerBuild, Containers
 from abd.context import App
 from abd.git import Git
 from abd.job.phases import Task, TaskId, PhaseType
-from abd.project import ExitCode
+from abd.project import ExitCode, Project
 
 log = logging.getLogger(__name__)
 
 HADOOP_BASE_DOCKERFILE = Path("Dockerfile_ubuntu_24")
 HADOOP_BASE_DOCKERFILE_ARM = Path("Dockerfile_ubuntu_24_aarch64")
 HADOOP_BUILD_CONTAINER = "hadoop-build"
+HADOOP_HOME = "/opt/hadoop"
 
 
 class HadoopBuild(ContainerBuild):
@@ -42,7 +43,8 @@ class HadoopBuild(ContainerBuild):
         return f"hadoop-build-{self.user}"
 
     @override
-    def get_container_name(self, index: int = 0) -> str:
+    @classmethod
+    def get_container_name(cls, index: int = 0) -> str:
         return HADOOP_BUILD_CONTAINER
 
     @override
@@ -89,7 +91,6 @@ class HadoopBuild(ContainerBuild):
             log.warning("Hadoop build container is single-instance; ignoring index.")
 
         build_image = self.get_image_name()
-        # local_cloudstore = Path(self.h_cfg.hadoop.cloudstore_git_path)
 
         # From hadoop.git:
         # By mapping the .m2 directory you can do an mvn install from
@@ -165,7 +166,7 @@ class HadoopBuild(ContainerBuild):
             log.error(f"Failed to find hadoop release.. {output}")
         return path
 
-    def find_cloudstore_release(self) -> Path | None:
+    def _find_cloudstore_release(self) -> Tuple[Path | None, str]:
         dist_dir = Path(self.docker_home_dir) / "cloudstore" / "target"
         list_cmd = f"docker exec hadoop-build bash -c 'find {dist_dir} -name cloudstore-*.jar'"
         (exit_code, output) = cmd.run(list_cmd)
@@ -174,10 +175,22 @@ class HadoopBuild(ContainerBuild):
         paths.sort(reverse=True)
         if exit_code != 0 or len(paths) == 0:
             log.error(f"Failed to find cloudstore release.. {output}")
-            return None
-        return paths[0]
+            return (None, output)
+        return (paths[0], "")
 
-    def fetch_hadoop_build(self, local_dir: Path) -> tuple[ExitCode, Path | None]:
+    def find_cloudstore_release(self) -> Path | None:
+        (path, output) = self._find_cloudstore_release()
+        if not path:
+            log.error(f"Failed to find cloudstore release.. {output}")
+        return path
+
+    def fetch_hadoop_build(self, local_dir: Path, is_cached=False) -> tuple[ExitCode, Path | None]:
+        if is_cached:
+            paths = local_dir.glob("hadoop-*.tar.gz")
+            first_match = next(paths, None)
+            if first_match:
+                log.info(f"[cache hit] existing hadoop build {first_match}.")
+                return (0, first_match)
         path = self.find_hadoop_release()
         if not path:
             return (1, None)
@@ -190,13 +203,14 @@ class HadoopBuild(ContainerBuild):
             return (ret, None)
         return (0, local_dir / path.name)
 
-    def fetch_cloudstore_build(self, local_dir: Path) -> tuple[ExitCode, Path | None]:
+    def fetch_cloudstore_build(self, local_dir: Path,
+                               is_dryrun: bool) -> tuple[ExitCode, Path | None]:
         path = self.find_cloudstore_release()
         if not path:
             return (1, None)
         log.debug(f"Using cloudstore build: {path}")
         c = f"docker cp hadoop-build:{path} {local_dir}/"
-        (ret, _) = cmd.run(c)
+        (ret, _) = cmd.run(c, is_dryrun=is_dryrun)
         if ret != 0:
             log.error("Failed to copy cloudstore release from {HADOOP_BUILD_CONTAINER}.")
             return (ret, None)
@@ -223,7 +237,7 @@ class GitHadoop(Task):
 
 
 class HadoopBuildImageTask(Task):
-    phase_id = TaskId("hadoop-build", PhaseType.BUILD)
+    phase_id = TaskId("hadoop-build-image", PhaseType.BUILD)
 
     @override
     def dependencies(self) -> Set[TaskId]:
@@ -266,7 +280,7 @@ class BuildHadoopRelease(Task):
         err = builder.build_in_container(is_cached, is_dryrun)
         if err != 0:
             raise RuntimeError("Failed to build hadoop in container.")
-        (err, path) = builder.fetch_hadoop_build(self.get_output_dir())
+        (err, path) = builder.fetch_hadoop_build(self.get_output_dir(), is_cached=is_cached)
         if err != 0 or not path:
             raise RuntimeError("Failed to fetch hadoop release from container.")
         log.info(f"Hadoop build downloaded to local {path}")
@@ -279,17 +293,60 @@ class InstallHadoop(Task):
     def dependencies(self) -> Set[TaskId]:
         return {BuildHadoopRelease.phase_id, NodeDeployTask.phase_id}
 
-    @override
-    def run(self, arg: App, is_cached: bool, is_dryrun: bool):
-        n_build = ClusterNodeBuild(arg)
+    def _install_hadoop(self, app: App, is_cached: bool, is_dryrun: bool):
+        n_build = ClusterNodeBuild(app)
         if is_cached and n_build.check_hadoop_install():
             log.info("[cache hit] existing Hadoop installation on cluster nodes.")
-            return
-        h_build = HadoopBuild(arg)
-        (err, path) = h_build.fetch_hadoop_build(self.get_output_dir())
-        if err != 0 or not path:
-            raise RuntimeError("Failed to fetch hadoop release from container.")
-        n_build = ClusterNodeBuild(arg)
-        err = n_build.install_hadoop(path)
+        else:
+            h_build = HadoopBuild(app)
+            (err, path) = h_build.fetch_hadoop_build(self.get_output_dir(), is_cached=is_cached)
+            if err != 0 or not path:
+                raise RuntimeError("Failed to fetch hadoop release from container.")
+            err = n_build.install_hadoop(path, is_dryrun)
+            if err != 0:
+                raise RuntimeError("Failed to install hadoop on cluster nodes.")
+
+        # Copy auth-keys.yml config for s3 (localstack) etc.
+        config_path = Project.get_project_root() / "config" / "auth-keys.xml"
+        dest_path = Path(HADOOP_HOME) / "etc" / "hadoop"
+        ret = n_build.copy_to_containers(config_path, str(dest_path))
+        if ret != 0:
+            return ret
+
+    def _install_cloudstore(self, app: App, is_cached: bool, is_dryrun: bool):
+        n_build = ClusterNodeBuild(app)
+        h_build = HadoopBuild(app)
+        if is_cached:
+            path = n_build.find_in_containers("cloudstore-*.jar")
+            if path:
+                log.info(f"[cache hit] existing cloudstore jar {path} on cluster nodes.")
+                return
+
+            (err, path) = h_build.fetch_cloudstore_build(Project.get_build_dir(), is_dryrun)
+            if err == 0 and path:
+                err = n_build.copy_to_containers(path, is_dryrun=is_dryrun)
+                if err != 0:
+                    raise RuntimeError("Failed to copy cloudstore jar to cluster nodes.")
+
+    def _patch_config(self, app: App, is_dryrun: bool):
+        n_build = ClusterNodeBuild(app)
+        err = n_build.copy_to_containers(Project.get_project_root() / "abd" / "scripts"
+                                         / "hadoop-inject-config.sh", is_dryrun=is_dryrun)
         if err != 0:
-            raise RuntimeError("Failed to install hadoop on cluster nodes.")
+            raise RuntimeError("Failed to copy hadoop-inject-confit.sh to cluster nodes.")
+
+        deploy = app.get_config().get_deploy_cfg("cluster-node")
+        nodes = n_build.get_deploy_hosts(deploy)
+        for host in nodes:
+            (err, output) = host.run_command("./hadoop-inject-config.sh", is_dryrun=is_dryrun)
+            if err != 0:
+                e = f"Failed to inject config on {host}: {output}"
+                log.error(e)
+                raise RuntimeError(e)
+        log.info("✅ Successfully injected hadoop config on cluster nodes.")
+
+    @override
+    def run(self, arg: App, is_cached: bool, is_dryrun: bool):
+        self._install_hadoop(arg, is_cached, is_dryrun)
+        self._patch_config(arg, is_dryrun)
+        self._install_cloudstore(arg, is_cached, is_dryrun)

@@ -20,25 +20,35 @@ def _join_lines(cmd: str) -> str:
     return " ".join(line.strip() for line in cmd.splitlines())
 
 
-def run_throws(cmd: str, cwd: Path | None = None, input: str = "") -> str:
+def run_throws(cmd: str, cwd: Path | None = None, input: str = "", quiet=False) -> str:
     """ Run a command and return its output, or throw if it fails. """
-    exit_code, output = run(cmd, cwd, input)
+    exit_code, output = run(cmd, cwd, input, quiet=quiet)
     if exit_code != 0:
         raise Exception(f"Command '{_join_lines(cmd)}' failed with exit code {exit_code}")
     return output
 
 
-def run(cmd: str, cwd: Path | None = None, input: str = "", is_dryrun: bool = False) -> CmdResult:
+def run(cmd: str, cwd: Path | None = None, input: str = "", is_dryrun=False,
+        quiet=False) -> CmdResult:
     """ Run a command and capture its output. """
+    output = ""
     cmd = _join_lines(cmd)
     if is_dryrun:
         print(f"[DRY RUN] {cmd} (cwd={cwd})")
         return CmdResult(exit_code=0, std_out="")
     log.info(f"-> {cmd} (cwd={cwd})")
     result = subprocess.run(cmd, shell=True, input=input, text=True, capture_output=True, cwd=cwd)
+    serr = result.stderr.strip()
+    sout = result.stdout.strip()
     if result.returncode != 0:
-        log.error(result.stderr)
-    return CmdResult(exit_code=result.returncode, std_out=result.stdout)
+        fn = log.error if not quiet else log.info
+        fn(f"{cmd} -> {result.stderr}")
+        output = serr
+    if output and sout:
+        output += "\n"
+    output += sout
+    log.info(f"OUTPUT: \"{output}\"")
+    return CmdResult(exit_code=result.returncode, std_out=output)
 
 
 def run_raw(cmd: list[str], cwd: Path | None = None) -> ExitCode:
@@ -50,7 +60,7 @@ def run_raw(cmd: list[str], cwd: Path | None = None) -> ExitCode:
 
 
 def run_print(cmd: str, cwd: Path | None = None, log_prefix="", quiet_failure=False,
-              is_dryrun: bool = False) -> ExitCode:
+              is_dryrun=False) -> ExitCode:
     """ Run a command and stream its output to the console. """
     cmd = _join_lines(cmd)
     p = f"[{log_prefix}] " if log_prefix else ""
@@ -118,3 +128,11 @@ def userinfo() -> tuple[str, int]:
     username = run_throws("whoami").strip()
     uid = int(run_throws("id -u").strip())
     return username, uid
+
+
+def which(cmd: str) -> str | None:
+    """ Return the path to an executable, or None if not found. """
+    try:
+        return run_throws(f"which {cmd}", quiet=True).strip()
+    except Exception:
+        return None

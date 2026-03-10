@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Protocol, override
 
 import abd.command as cmd
-from abd.project import ExitCode
+from abd.project import CmdResult
 
 
 class HostType(Enum):
@@ -21,7 +21,7 @@ class Host(Protocol):
     def get_name(self) -> str:
         ...
 
-    def run_command(self, command: str, quiet_failure: bool = False) -> ExitCode:
+    def run_command(self, command: str, quiet_failure=False, is_dryrun=False) -> CmdResult:
         ...
 
 
@@ -39,8 +39,8 @@ class Container(Host):
         return self.name
 
     @override
-    def run_command(self, command: str, quiet_failure: bool = False) -> ExitCode:
+    def run_command(self, command: str, quiet_failure=False, is_dryrun=False) -> CmdResult:
         # use -l for login shell to pick up PATH etc.
-        docker_cmd = f"docker exec {self.name} bash -lc '{command}'"
-        return cmd.run_print(docker_cmd, log_prefix=self.name,
-                             quiet_failure=quiet_failure)
+        opt = "" if quiet_failure else "-e -o pipefail "
+        docker_cmd = f"docker exec {self.name} bash {opt}-lc '{command}'"
+        return cmd.run(docker_cmd, quiet=quiet_failure, is_dryrun=is_dryrun)

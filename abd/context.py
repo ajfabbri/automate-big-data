@@ -12,7 +12,8 @@ class Args:
     is_dryrun: bool
     is_cached: bool
     is_interactive: bool
-    # TODO finer granularity
+    task_name: str | None
+    # TODO finer granularity cached option?
     # cache_build: bool
     # cache_image: bool
     # cache_install: bool

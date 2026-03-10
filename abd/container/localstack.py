@@ -3,6 +3,7 @@ import logging
 from typing import override
 import abd.command as cmd
 from abd.container.container import ContainerBuild, Containers
+from abd.container.net import NetworkTask
 from abd.context import App
 from abd.job.phases import Task, TaskId, PhaseType
 from abd.project import ExitCode
@@ -14,16 +15,12 @@ class LocalstackBuild(ContainerBuild):
     """ Support for localstack container. """
 
     @override
-    def __init__(self, app: App):
-        super().__init__(app)
-        # TODO
-
-    @override
     def get_image_name(self) -> str:
         return "localstack/localstack"
 
     @override
-    def get_container_name(self, index: int = 0) -> str:
+    @classmethod
+    def get_container_name(cls, index: int = 0) -> str:
         return "abd-localstack"
 
     @override
@@ -78,6 +75,11 @@ class LocalstackTask(Task):
         pass
 
     @override
+    def dependencies(self) -> set[TaskId]:
+        return {NetworkTask.phase_id}
+
+    @override
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):
         localstack = LocalstackBuild(arg)
         localstack.run_container(is_dryrun)
+        localstack.ensure_s3_bucket("abd-bucket")

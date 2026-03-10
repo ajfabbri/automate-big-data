@@ -1,0 +1,23 @@
+import logging
+from typing import override
+
+from abd.container.cluster_node import NodeDeployTask
+from abd.container.localstack import LocalstackTask
+from abd.context import App
+from abd.job.phases import PhaseType, Task, TaskId
+
+log = logging.getLogger(__name__)
+
+
+class ClusterTask(Task):
+    """ Top-level cluster deploy task. """
+    phase_id = TaskId("cluster", PhaseType.DEPLOY)
+
+    @override
+    def dependencies(self):
+        # all nodes must be deployed before cluster is ready
+        return {NodeDeployTask.phase_id, LocalstackTask.phase_id}
+
+    @override
+    def run(self, arg: App, is_cached: bool, is_dryrun: bool):
+        log.info("Cluster is ready!")
