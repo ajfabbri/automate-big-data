@@ -4,8 +4,9 @@ from typing import Protocol
 import typing
 
 import abd.command as cmd
-from abd.config.raw import Config
+from abd.config.raw import Config, DeployCfg
 from abd.context import App
+from abd.host import Container, Host
 from abd.project import ExitCode
 log = logging.getLogger(__name__)
 
@@ -64,12 +65,12 @@ class Containers:
         return output.strip().splitlines()
 
     @classmethod
-    def create_network(cls, net_name: str) -> ExitCode:
+    def create_network(cls, net_name: str, is_dryrun: bool = False) -> ExitCode:
         if net_name in cls.list_networks():
             log.info(f"Network {net_name} already exists.")
             return 0
         c = f"docker network create {net_name}"
-        return cmd.run_print(c)
+        return cmd.run_print(c, is_dryrun=is_dryrun)
 
 
 class ContainerBuild(Protocol):
@@ -94,7 +95,8 @@ class ContainerBuild(Protocol):
     def get_image_name(self) -> str:
         ...
 
-    def get_container_name(self, index: int = 0) -> str:
+    @classmethod
+    def get_container_name(cls, index: int = 0) -> str:
         ...
 
     def build_image(self, is_cached: bool, is_dryrun: bool) -> ExitCode:
@@ -103,3 +105,10 @@ class ContainerBuild(Protocol):
 
     def run_container(self, is_dryrun: bool, index: int = 0) -> ExitCode:
         ...
+
+    @classmethod
+    def get_deploy_hosts(cls, deploy_cfg: DeployCfg) -> set[Host]:
+        hosts = set()
+        for i in range(deploy_cfg.num_nodes):
+            hosts.add(Container(cls.get_container_name(i)))
+        return hosts

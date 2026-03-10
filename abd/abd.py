@@ -5,9 +5,12 @@ import logging
 import sys
 
 from abd import task_registry
+from abd import project
+from abd.config.phase import ConfigTask
 from abd.config.raw import Config
 from abd.config.raw import Loader
-
+import abd.command as cmd
+from abd.container.cluster_node import ClusterNodeBuild
 from abd.container.container import Containers
 from abd.context import App, Args
 from abd.job.job import Job
@@ -50,18 +53,56 @@ def do_deploy(app: App, args: argparse.Namespace) -> ExitCode:
     return ret
 
 
-def do_exec(app: App, args: argparse.Namespace):
+def do_exec(app: App):
     # default to cached mode on exec; user can run a build or deploy without
     # --cached if they really want to rebuild things
-    app.args.is_cached = args.cached if hasattr(args, 'cached') else True
-    runner = NewRunner(app)
-    runner.run(PhaseType.EXECUTE)
+    errors = []
+    app.args.is_cached = True
+    if app.args.raw.shell:
+        cmd = app.args.raw.shell.strip()
+        ConfigTask().run(app, is_cached=False, is_dryrun=app.args.is_dryrun)
+        deploy = app.get_config().get_deploy_cfg("cluster-node")
+        for host in ClusterNodeBuild.get_deploy_hosts(deploy):
+            (err, output) = host.run_command(cmd)
+            if err != 0:
+                errors.append(f"[host {host.get_name()}] error executing `{cmd}`:\n {output}")
+            print(f"{host.get_name()}> {output}")
+        if errors:
+            log.error("Errors executing command on hosts:\n" + "\n".join(errors))
+            raise RuntimeError("Errors executing command on hosts.")
+    else:
+        runner = NewRunner(app)
+        runner.run(PhaseType.EXECUTE, task_name=app.args.task_name)
 
 
 def do_tasks(app: App):
+    show_graph = app.args.raw.graph if hasattr(app.args.raw, 'graph') else False
     job = Job()
-    for t in sorted(job.get_tasks().keys(), key=lambda x: (x.phase_type.value, x.name)):
-        print(t)
+    dot = job.to_dot_graph()
+    build_dir = project.Project.get_build_dir()
+    print_text = True
+    if show_graph:
+        # use graphviz if available, else just print .dot file
+        if cmd.which("dot"):
+            dot_path = build_dir / "abd_tasks.dot"
+            svg_path = build_dir / "abd_tasks.svg"
+            try:
+                with open(dot_path, "w") as f:
+                    f.write(dot)
+                cmd.run_throws(f"dot -Tsvg {dot_path} -o {svg_path}")
+                # attempt to display the image
+                if cmd.which("xdg-open"):
+                    cmd.run_throws(f"xdg-open {svg_path}", quiet=True)
+                elif cmd.which("open"):
+                    cmd.run_throws(f"open {svg_path}", quiet=True)
+                print_text = False
+            except Exception as e:
+                log.warn(f"Failed display graph w/ graphviz: {e}")
+        if print_text:
+            print(dot)
+    else:
+        for t in sorted(job.get_tasks().keys(), key=lambda x: (x.phase_type.value, x.name)):
+            print(t)
 
 
 def add_interactive_opt(parser: argparse.ArgumentParser):
@@ -82,6 +123,10 @@ def add_dryrun_opt(parser: argparse.ArgumentParser):
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing.")
 
 
+def add_task_opt(parser: argparse.ArgumentParser):
+    parser.add_argument("--task", "-t", help="Run a specific task by name.")
+
+
 def parse_args(parser: argparse.ArgumentParser) -> Args:
     # Parse args and configure logging
     args = parser.parse_args()
@@ -98,7 +143,9 @@ def parse_args(parser: argparse.ArgumentParser) -> Args:
     dry = args.dry_run if hasattr(args, 'dry_run') else False
     cached = args.cached if hasattr(args, 'cached') else False
     interactive = args.interactive if hasattr(args, 'interactive') else False
-    return Args(is_dryrun=dry, is_cached=cached, is_interactive=interactive, raw=args)
+    task = args.task if hasattr(args, 'task') else None
+    return Args(is_dryrun=dry, is_cached=cached, is_interactive=interactive,
+                task_name=task, raw=args)
 
 
 def main() -> ExitCode:
@@ -132,15 +179,21 @@ def main() -> ExitCode:
     # execute
     exec_p = subparsers.add_parser("exec", help="Execute commands on cluster nodes.")
     add_dryrun_opt(exec_p)
+    add_task_opt(exec_p)
+    exec_p.add_argument("--shell", "-s", help="Run this shell command instead of registered task.")
 
     # tasks
-    _ = subparsers.add_parser("tasks", help="Show registered tasks.")
+    tasks_p = subparsers.add_parser("tasks", help="Show registered tasks.")
+    tasks_p.add_argument("--graph", "-g", action="store_true",
+                         help="Show graph of task dependencies")
 
     # init main app context
     _ = task_registry.init()
     args = parse_args(parser)
     app = App(args)
     if args.raw.command == "config":
+        # TODO just register a shell task and use runner?
+
         do_config(args.is_interactive, app.ui)
     else:
         if args.raw.command == "build":
@@ -148,7 +201,7 @@ def main() -> ExitCode:
         elif args.raw.command == "deploy":
             do_deploy(app, args.raw)
         elif args.raw.command == "exec":
-            do_exec(app, args.raw)
+            do_exec(app)
         elif args.raw.command == "tasks":
             do_tasks(app)
         else:

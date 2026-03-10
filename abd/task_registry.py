@@ -1,8 +1,10 @@
 from abd.builder.hadoop import BuildHadoopRelease, DeployHadoopBuildContainer, \
     GitHadoop, HadoopBuildImageTask, InstallHadoop
+from abd.container.cluster import ClusterTask
 from abd.container.cluster_node import NodeBuildTask, NodeDeployTask
 from abd.container.localstack import LocalstackTask
-from abd.executions.hadoop import HadoopSanityTask
+from abd.container.net import NetworkTask
+from abd.executions.hadoop import HadoopSanityTask, S3ARoundTrip
 from abd.job.job import Job
 from abd.job.phases import Task
 
@@ -30,9 +32,11 @@ tasks: list[Task] = [
     # | | | | |  _| | | (_| |
     # |_|_| |_|_| |_|  \__,_|
     #
+    NetworkTask(),
     LocalstackTask(),
     NodeBuildTask(),
     NodeDeployTask(),
+    ClusterTask(),
 
     #                           _   _
     #   _____  _____  ___ _   _| |_(_) ___  _ __  ___
@@ -41,6 +45,7 @@ tasks: list[Task] = [
     #  \___/_/\_\___|\___|\__,_|\__|_|\___/|_| |_|___/
     #
     HadoopSanityTask(),
+    S3ARoundTrip(),
 ]
 
 

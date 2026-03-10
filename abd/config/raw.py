@@ -103,8 +103,14 @@ class Config:
             case _:
                 raise ValueError(f"Unsupported build type: {build_type}")
 
-    def get_deploy_cfg(self, deploy_name: str) -> DeployCfg | None:
+    def try_get_deploy_cfg(self, deploy_name: str) -> DeployCfg | None:
         return self.deploy.get(deploy_name)
+
+    def get_deploy_cfg(self, deploy_name: str) -> DeployCfg:
+        cfg = self.try_get_deploy_cfg(deploy_name)
+        if not cfg:
+            raise ValueError(f"Deploy config not found: {deploy_name}")
+        return cfg
 
     def to_dict(self) -> dict:
         """Convert config a dict of primitive types (for serialization)."""
