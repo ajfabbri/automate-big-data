@@ -27,9 +27,9 @@ def do_config(is_interactive: bool, ui: Ui) -> Config:
     return loader.create(is_interactive, ui)
 
 
-def do_build(app: App):
+def do_build(app: App) -> ExitCode:
     runner = NewRunner(app)
-    runner.run(PhaseType.BUILD)
+    return runner.run(PhaseType.BUILD)
 
 
 def do_deploy(app: App, args: argparse.Namespace) -> ExitCode:
@@ -41,27 +41,27 @@ def do_deploy(app: App, args: argparse.Namespace) -> ExitCode:
             for cname in Containers.list(name_filter):
                 print(cname)
         case "run":
-            runner.run(PhaseType.DEPLOY)
+            return runner.run(PhaseType.DEPLOY)
         case "stop":
-            Containers.stop(name_filter)
+            return Containers.stop(name_filter)
         case "attach":
             if not name_filter:
                 log.error("Must provide --name argument for attach command.")
                 ret = 1
             else:
-                Containers.attach(name_filter)
+                return Containers.attach(name_filter)
     return ret
 
 
-def do_exec(app: App):
+def do_exec(app: App) -> ExitCode:
     # default to cached mode on exec; user can run a build or deploy without
     # --cached if they really want to rebuild things
-    errors = []
     app.args.is_cached = True
     if app.args.raw.shell:
         cmd = app.args.raw.shell.strip()
         ConfigTask().run(app, is_cached=False, is_dryrun=app.args.is_dryrun)
         deploy = app.get_config().get_deploy_cfg("cluster-node")
+        errors = []
         for host in ClusterNodeBuild.get_deploy_hosts(deploy):
             (err, output) = host.run_command(cmd)
             if err != 0:
@@ -69,10 +69,14 @@ def do_exec(app: App):
             print(f"{host.get_name()}> {output}")
         if errors:
             log.error("Errors executing command on hosts:\n" + "\n".join(errors))
-            raise RuntimeError("Errors executing command on hosts.")
+            return 1
+        return 0
     else:
         runner = NewRunner(app)
-        runner.run(PhaseType.EXECUTE, task_name=app.args.task_name)
+        err = runner.run(PhaseType.EXECUTE, task_name=app.args.task_name)
+        if err != 0:
+            log.error(f"⛔️ Error {err} executing task(s).")
+        return err
 
 
 def do_tasks(app: App):
@@ -97,7 +101,7 @@ def do_tasks(app: App):
                     cmd.run_throws(f"open {svg_path}", quiet=True)
                 print_text = False
             except Exception as e:
-                log.warn(f"Failed display graph w/ graphviz: {e}")
+                log.warning(f"Failed display graph w/ graphviz: {e}")
         if print_text:
             print(dot)
     else:
@@ -197,11 +201,11 @@ def main() -> ExitCode:
         do_config(args.is_interactive, app.ui)
     else:
         if args.raw.command == "build":
-            do_build(app)
+            return do_build(app)
         elif args.raw.command == "deploy":
-            do_deploy(app, args.raw)
+            return do_deploy(app, args.raw)
         elif args.raw.command == "exec":
-            do_exec(app)
+            return do_exec(app)
         elif args.raw.command == "tasks":
             do_tasks(app)
         else:

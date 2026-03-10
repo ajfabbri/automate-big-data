@@ -4,7 +4,8 @@ from typing import Set, Tuple, override
 from abd.builder.image import ImageBuilder
 from abd.config.raw import HADOOP_GIT_URI, BuildType
 import abd.command as cmd
-from abd.container.cluster_node import ClusterNodeBuild, NodeDeployTask
+from abd.container.cluster import ClusterTask
+from abd.container.cluster_node import ClusterNodeBuild
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App
 from abd.git import Git
@@ -291,7 +292,7 @@ class InstallHadoop(Task):
 
     @override
     def dependencies(self) -> Set[TaskId]:
-        return {BuildHadoopRelease.phase_id, NodeDeployTask.phase_id}
+        return {BuildHadoopRelease.phase_id, ClusterTask.phase_id}
 
     def _install_hadoop(self, app: App, is_cached: bool, is_dryrun: bool):
         n_build = ClusterNodeBuild(app)
@@ -333,7 +334,7 @@ class InstallHadoop(Task):
         err = n_build.copy_to_containers(Project.get_project_root() / "abd" / "scripts"
                                          / "hadoop-inject-config.sh", is_dryrun=is_dryrun)
         if err != 0:
-            raise RuntimeError("Failed to copy hadoop-inject-confit.sh to cluster nodes.")
+            raise RuntimeError("Failed to copy hadoop-inject-config.sh to cluster nodes.")
 
         deploy = app.get_config().get_deploy_cfg("cluster-node")
         nodes = n_build.get_deploy_hosts(deploy)
