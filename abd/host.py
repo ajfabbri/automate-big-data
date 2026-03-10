@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Protocol, override
 
 import abd.command as cmd
-from abd.project import CmdResult
+from abd.project import CmdResult, ExitCode
 
 
 class HostType(Enum):
@@ -24,6 +24,9 @@ class Host(Protocol):
     def run_command(self, command: str, quiet_failure=False, is_dryrun=False) -> CmdResult:
         ...
 
+    def run_print(self, command: str, quiet_failure=False, is_dryrun=False) -> ExitCode:
+        ...
+
 
 @dataclass(eq=True, frozen=True)
 class Container(Host):
@@ -38,9 +41,18 @@ class Container(Host):
     def get_name(self) -> str:
         return self.name
 
-    @override
-    def run_command(self, command: str, quiet_failure=False, is_dryrun=False) -> CmdResult:
+    def _make_cmd(self, cmd: str, quiet_failure: bool) -> str:
         # use -l for login shell to pick up PATH etc.
         opt = "" if quiet_failure else "-e -o pipefail "
-        docker_cmd = f"docker exec {self.name} bash {opt}-lc '{command}'"
+        docker_cmd = f"docker exec {self.name} bash {opt}-lc '{cmd}'"
+        return docker_cmd
+
+    @override
+    def run_command(self, command: str, quiet_failure=False, is_dryrun=False) -> CmdResult:
+        docker_cmd = self._make_cmd(command, quiet_failure)
         return cmd.run(docker_cmd, quiet=quiet_failure, is_dryrun=is_dryrun)
+
+    @override
+    def run_print(self, command: str, quiet_failure=False, is_dryrun=False) -> ExitCode:
+        docker_cmd = self._make_cmd(command, quiet_failure)
+        return cmd.run_print(docker_cmd, is_dryrun=is_dryrun)
