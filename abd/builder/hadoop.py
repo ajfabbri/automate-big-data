@@ -1,5 +1,6 @@
 from pathlib import Path
 import logging
+from time import sleep
 from typing import Set, Tuple, override
 from abd.builder.image import ImageBuilder
 from abd.config.raw import HADOOP_GIT_URI, BuildType
@@ -129,6 +130,11 @@ class HadoopBuild(ContainerBuild):
             if path:
                 log.info(f"[cache hit]: existing hadoop build {path}.")
                 return 0
+        check_cmd = "docker exec hadoop-build bash -lc '[ ! -z \"$MAVEN_OPTS\" ]'"
+        (err, _) = cmd.run(check_cmd)
+        if err != 0:
+            log.warning("⚠️MAVEN_OPTS not set in container; builds may run out of memory.")
+            sleep(2)
         mvn_build = "mvn package -Pdist,native -DskipTests -Dtar -Dmaven.javadoc.skip=true"
         mvn_build += " -Dhadoop-aws-package"
         # Skip slow BOM generation

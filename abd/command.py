@@ -47,7 +47,6 @@ def run(cmd: str, cwd: Path | None = None, input: str = "", is_dryrun=False,
     if output and sout:
         output += "\n"
     output += sout
-    log.info(f"OUTPUT: \"{output}\"")
     return CmdResult(exit_code=result.returncode, std_out=output)
 
 
