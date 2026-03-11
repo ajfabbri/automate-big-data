@@ -82,7 +82,7 @@ class HadoopBuild(ContainerBuild):
         # build user-specific image
         docker_input = f"""
         FROM hadoop-build
-        RUN apt-get update && apt-get install -y iputils-ping
+        RUN apt-get update && apt-get install -y iputils-ping neovim
         RUN rm -f /var/log/faillog /var/log/lastlog
         RUN userdel -r $(getent passwd {self.uid} | cut -d: -f1) 2>/dev/null || :
         RUN groupadd --non-unique -g {self.gid} {self.user}
@@ -107,6 +107,7 @@ class HadoopBuild(ContainerBuild):
         # system.  And this also is a significant speedup in subsequent
         # builds because the dependencies are downloaded only once.
 
+        # on linux, add --oom-kill-disable
         run_cmd = f"""
         docker run --rm=true
                 -v "{self.local_hadoop}:{self.docker_home_dir}/hadoop"
@@ -117,7 +118,8 @@ class HadoopBuild(ContainerBuild):
                 -u "{self.uid}"
                 --network "{self.app.container_network}"
                 --name "{HADOOP_BUILD_CONTAINER}"
-                -m 16g --oom-kill-disable
+                --hostname "{HADOOP_BUILD_CONTAINER}"
+                --memory=12g
                 -dit
                 {build_image}
         """

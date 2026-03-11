@@ -57,6 +57,7 @@ class ClusterNodeBuild(ContainerBuild):
         docker run --rm=true
             --network {self.app.container_network}
             --name "{container_name}"
+            --hostname "{container_name}"
             -dit
             {self.get_image_name()}
         """
