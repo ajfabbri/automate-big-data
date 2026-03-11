@@ -32,10 +32,17 @@ class HadoopBuild(ContainerBuild):
         ccfg = cfg.get_build_cfg(BuildType.CLOUDSTORE)
         if hcfg:
             self.h_cfg = hcfg
-            self.local_hadoop = Path(self.h_cfg.git_path).absolute()
+            proj_dir = Project.get_project_root()
+            hpath = Path(self.h_cfg.git_path)
+            if not hpath.is_absolute():
+                hpath = proj_dir / hpath
+            self.local_hadoop = hpath
             if ccfg:
                 self.c_cfg = ccfg
-                self.local_cloudstore = Path(self.c_cfg.git_path).absolute()
+                cpath = Path(self.c_cfg.git_path)
+                if not cpath.is_absolute():
+                    cpath = proj_dir / cpath
+                self.local_cloudstore = cpath
         else:
             raise Exception("Hadoop config is required for HadoopBuild.")
 
