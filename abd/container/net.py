@@ -8,7 +8,7 @@ log = logging.getLogger(__name__)
 
 
 class NetworkTask(Task):
-    phase_id = TaskId("network", PhaseType.DEPLOY)
+    task_id = TaskId("network", PhaseType.DEPLOY)
 
     # no dependencies, yet.
 

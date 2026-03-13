@@ -10,9 +10,10 @@ from abd.ui import Ui
 class Args:
     """CLI args etc."""
     is_dryrun: bool
-    is_cached: bool
+    # list of task IDs, or strings to match them
+    cached: set[str]
     is_interactive: bool
-    task_name: str | None
+    task_str: str | None
     # TODO finer granularity cached option?
     # cache_build: bool
     # cache_image: bool

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol, override
+from typing import Iterator, Protocol, override
 
 import abd.command as cmd
 from abd.project import CmdResult, ExitCode
@@ -25,6 +25,10 @@ class Host(Protocol):
         ...
 
     def run_print(self, command: str, quiet_failure=False, is_dryrun=False) -> ExitCode:
+        ...
+
+    def run_streaming(self, command: str, filter_re=".*", quiet_failure=False,
+                      is_dryrun=False) -> Iterator[str | ExitCode]:
         ...
 
 
@@ -56,3 +60,10 @@ class Container(Host):
     def run_print(self, command: str, quiet_failure=False, is_dryrun=False) -> ExitCode:
         docker_cmd = self._make_cmd(command, quiet_failure)
         return cmd.run_print(docker_cmd, is_dryrun=is_dryrun)
+
+    @override
+    def run_streaming(self, command: str, filter_re=".*", quiet_failure=False,
+                      is_dryrun=False) -> Iterator[str | ExitCode]:
+        docker_cmd = self._make_cmd(command, quiet_failure)
+        return cmd.run_streaming(docker_cmd, filter_re=filter_re,
+                                 quiet=quiet_failure, is_dryrun=is_dryrun)

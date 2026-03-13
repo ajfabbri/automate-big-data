@@ -29,7 +29,7 @@ class Task[T: App](Protocol):
         R is type of the output of the phase, if any.
         T is type of input argument, if any. (For now we always use context.App.)
         """
-    phase_id: ClassVar[TaskId]
+    task_id: ClassVar[TaskId]
 
     def dependencies(self) -> Set[TaskId]:
         """ Return list of phases this depends on. Default: no dependencies """
@@ -43,7 +43,7 @@ class Task[T: App](Protocol):
         ...
 
     def get_output_dir(self) -> Path:
-        return Project.get_build_dir() / f"{self.phase_id}"
+        return Project.get_build_dir() / f"{self.task_id}"
 
     def __str__(self):
-        return f"{self.phase_id.phase_type}:{self.phase_id.name}"
+        return f"{self.task_id.phase_type}:{self.task_id.name}"

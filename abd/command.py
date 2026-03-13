@@ -1,3 +1,5 @@
+import re
+from typing import Iterator
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
@@ -58,7 +60,7 @@ def run_raw(cmd: list[str], cwd: Path | None = None) -> ExitCode:
     return result.returncode
 
 
-def run_print(cmd: str, cwd: Path | None = None, log_prefix="", quiet_failure=False,
+def run_print(cmd: str, cwd: Path | None = None, log_prefix="", quiet=False,
               is_dryrun=False) -> ExitCode:
     """ Run a command and stream its output to the console. """
     cmd = _join_lines(cmd)
@@ -76,9 +78,36 @@ def run_print(cmd: str, cwd: Path | None = None, log_prefix="", quiet_failure=Fa
             sys.stdout.write("> " + line)
             sys.stdout.flush()
         ret = proc.wait()
-        if ret != 0 and not quiet_failure:
+        if ret != 0 and not quiet:
             log.error(f"Command failed with exit code {proc.returncode}")
         return ret
+
+
+def run_streaming(cmd: str, filter_re=".*", quiet=False,
+                  is_dryrun=False) -> Iterator[str | ExitCode]:
+    """ Run a command and return output lines until finished, then return an
+        ExitCode. Only returns matching lines when filter_re is provided. """
+    cmd = _join_lines(cmd)
+    if is_dryrun:
+        print(f"[DRY RUN] {cmd}")
+        return 0
+    log.info(f"-> {cmd}")
+    regex = re.compile(filter_re)
+    with Popen(cmd, shell=True, text=True, stdout=subprocess.PIPE,
+               stderr=subprocess.STDOUT) as proc:
+        if proc.stdout is None:
+            log.error("Failed to capture command output")
+            return 1
+        for line in proc.stdout:
+            if regex.match(line):
+                log.debug(f"(filtered) {line}")
+                yield line.rstrip()
+            else:
+                log.debug(f"( match  ) {line}")
+        ret = proc.wait()
+        if ret != 0 and not quiet:
+            log.error(f"Command failed with exit code {proc.returncode}")
+        yield proc.returncode
 
 
 def run_with_status(ui: Ui, cmd: str, cwd: Path | None = None,

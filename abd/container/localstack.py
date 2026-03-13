@@ -69,14 +69,14 @@ class LocalstackBuild(ContainerBuild):
 
 
 class LocalstackTask(Task):
-    phase_id = TaskId("localstack", PhaseType.DEPLOY)
+    task_id = TaskId("localstack", PhaseType.DEPLOY)
 
     def __init__(self):
         pass
 
     @override
     def dependencies(self) -> set[TaskId]:
-        return {NetworkTask.phase_id}
+        return {NetworkTask.task_id}
 
     @override
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):
