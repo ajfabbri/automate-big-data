@@ -128,8 +128,8 @@ TASKID_HELP = "    TASK_STR can be a literal '<phase>:<name>' string \n" \
 
 def add_cached_opt(parser: argparse.ArgumentParser):
     help = "Skip updating artifacts for specific tasks. Default \"all\"."
-    parser.add_argument("-c", "--cached", metavar="TASK_STR", nargs="*", default="all",
-                        help=help)
+    parser.add_argument("-c", "--cached", metavar="TASK_STR", nargs="*", default=[],
+                        const=["all"], help=help)
 
 
 def add_task_opt(parser: argparse.ArgumentParser):
@@ -151,7 +151,7 @@ def parse_args(parser: argparse.ArgumentParser) -> Args:
 
     logging.basicConfig(level=log_level, format='%(name)s - %(levelname)s - %(message)s')
     dry = args.dry_run if hasattr(args, 'dry_run') else False
-    cached = args.cached if hasattr(args, 'cached') else set()
+    cached = set(args.cached) if hasattr(args, 'cached') else set()
     interactive = args.interactive if hasattr(args, 'interactive') else False
     task = args.task if hasattr(args, 'task') else None
     return Args(is_dryrun=dry, cached=cached, is_interactive=interactive,
