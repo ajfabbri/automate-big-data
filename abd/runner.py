@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import logging
 from queue import SimpleQueue, Empty
 from threading import Lock
+import time
 from typing import Callable, MutableMapping
 
 from abd.config.phase import ConfigTask
@@ -157,8 +158,11 @@ class NewRunner:
         cached_ids = TaskIdSet(self.job, cached_tasks)
 
         def execute(task: Task, is_cached: bool):
+            start_timestamp = time.monotonic()
             cstatus = " (cached)" if is_cached else ""
             log.info(f"Executing task: {task.task_id}{cstatus}")
             task.run(self.app, is_cached, self.app.args.is_dryrun)
+            elapsed = time.monotonic() - start_timestamp
+            log.info(f"✔️ {task.task_id} finished in {elapsed:.2f}s{cstatus}")
 
         return plan.run_parallel(target_str, execute, cached_ids)
