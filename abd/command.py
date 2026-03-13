@@ -90,20 +90,22 @@ def run_streaming(cmd: str, filter_re=".*", quiet=False,
     cmd = _join_lines(cmd)
     if is_dryrun:
         print(f"[DRY RUN] {cmd}")
-        return 0
+        yield 0
+        return
     log.info(f"-> {cmd}")
     regex = re.compile(filter_re)
     with Popen(cmd, shell=True, text=True, stdout=subprocess.PIPE,
                stderr=subprocess.STDOUT) as proc:
         if proc.stdout is None:
             log.error("Failed to capture command output")
-            return 1
+            yield 1
+            return
         for line in proc.stdout:
-            if regex.match(line):
-                log.debug(f"(filtered) {line}")
+            if regex.search(line):
+                log.debug(f"( match  ) {line}")
                 yield line.rstrip()
             else:
-                log.debug(f"( match  ) {line}")
+                log.debug(f"(filtered) {line}")
         ret = proc.wait()
         if ret != 0 and not quiet:
             log.error(f"Command failed with exit code {proc.returncode}")

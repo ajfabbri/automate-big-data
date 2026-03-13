@@ -51,10 +51,16 @@ class ExecutionPlan:
     def _propagate_cached(self, cached_tasks: TaskIdSet):
         """ For each t in cached_tasks, mark everything it depends on as also
         cached, modifying `cached_tasks` """
-        to_add = set()
-        for t in cached_tasks.get():
-            to_add.update(self.parents.get(t, []))
-        cached_tasks.get().update(to_add)
+        cached = cached_tasks.get()
+        to_add: set[TaskId] = set()
+        stack: list[TaskId] = list(cached)
+        while stack:
+            t = stack.pop()
+            for p in self.parents.get(t, []):
+                if p not in cached and p not in to_add:
+                    to_add.add(p)
+                    stack.append(p)
+        cached.update(to_add)
 
     def _compute_in_degree(self, needed: set[TaskId]) -> MutableMapping[TaskId, int]:
         in_degree = {}
