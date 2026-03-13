@@ -33,6 +33,7 @@ class LocalstackBuild(ContainerBuild):
               -p 127.0.0.1:4566:4566
               -p 127.0.0.1:4510-4559:4510-4559
               -v /var/run/docker.sock:/var/run/docker.sock
+              --env DEFAULT_REGION=us-west-2
               --name {self.get_container_name(index)}
               --network {self.app.container_network}
               {self.get_image_name()}
