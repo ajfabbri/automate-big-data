@@ -80,9 +80,10 @@ class HadoopBuild(ContainerBuild):
             return result
 
         # build user-specific image
+        packages = "iputils-ping neovim rsync ripgrep"
         docker_input = f"""
         FROM hadoop-build
-        RUN apt-get update && apt-get install -y iputils-ping neovim
+        RUN apt-get update && apt-get install -y {packages}
         RUN rm -f /var/log/faillog /var/log/lastlog
         RUN userdel -r $(getent passwd {self.uid} | cut -d: -f1) 2>/dev/null || :
         RUN groupadd --non-unique -g {self.gid} {self.user}
@@ -90,9 +91,23 @@ class HadoopBuild(ContainerBuild):
         RUN echo "{self.user} ALL=NOPASSWD: ALL" > "/etc/sudoers.d/hadoop-build-{self.uid}"
         ENV HOME="/home/{self.user}"
         ENV MAVEN_OPTS="-Xms256m -Xmx8g"
+        WORKDIR "/home/{self.user}"
+        RUN mkdir -p hadoop; chown {self.user}:{self.user} hadoop
         """
         u_builder = ImageBuilder(self.get_image_name(), base_dockerfile.parent)
         return u_builder.build_input(docker_input, is_dryrun)
+
+    def _push_hadoop_source(self, is_dryrun: bool) -> ExitCode:
+        """ Push updates to hadoop source tree into container's dir. """
+        # MacOS bind mounts are buggy: we manually copy from hadoop-host to hadoop
+        # every time we want to pull source updates into the container :-|
+        log.info("ℹ️Refreshing hadoop source from host..")
+        rsync_cmd = f"""
+        docker exec hadoop-build bash -c '
+            rsync -av --delete --exclude=.git --exclude=target
+                /home/{self.user}/hadoop-host/ /home/{self.user}/hadoop/'
+        """
+        return cmd.run_print(rsync_cmd, is_dryrun=is_dryrun)
 
     @override
     def run_container(self, is_dryrun: bool, index: int = 0) -> ExitCode:
@@ -108,12 +123,13 @@ class HadoopBuild(ContainerBuild):
         # builds because the dependencies are downloaded only once.
 
         # on linux, add --oom-kill-disable
+        # Mac bind mounts are problematic and require same JDK versions:
+        # -v "{self.local_home}/.m2:{self.docker_home_dir}/.m2"
+        # -w "{self.docker_home_dir}/hadoop"
         run_cmd = f"""
         docker run --rm=true
-                -v "{self.local_hadoop}:{self.docker_home_dir}/hadoop"
+                -v "{self.local_hadoop}:{self.docker_home_dir}/hadoop-host"
                 -v "{self.local_cloudstore}:{self.docker_home_dir}/cloudstore"
-                -w "{self.docker_home_dir}/hadoop"
-                -v "{self.local_home}/.m2:{self.docker_home_dir}/.m2"
                 -v "{self.local_home}/.gnupg:{self.docker_home_dir}/.gnupg"
                 -u "{self.uid}"
                 --network "{self.app.container_network}"
@@ -123,13 +139,17 @@ class HadoopBuild(ContainerBuild):
                 -dit
                 {build_image}
         """
+        err = 0
         if self.get_container_name() in Containers.list():
             log.info(f"Container {self.get_container_name()} already running.")
-            return 0
         else:
             # return cmd.run_with_status(self.app, run_cmd, cwd=self.local_hadoop,
             #                           is_dryrun=is_dryrun)
-            return cmd.run_print(run_cmd, cwd=self.local_hadoop, is_dryrun=is_dryrun)
+            err = cmd.run_print(run_cmd, cwd=self.local_hadoop, is_dryrun=is_dryrun)
+        if err != 0:
+            log.error("Failed to run hadoop-build container.")
+            return err
+        return self._push_hadoop_source(is_dryrun)
 
     def build_in_container(self, is_cached: bool, is_dryrun: bool) -> ExitCode:
         """ build hadoop common and cloudstore """
@@ -144,6 +164,7 @@ class HadoopBuild(ContainerBuild):
         if err != 0:
             log.warning("⚠️MAVEN_OPTS not set in container; builds may run out of memory.")
             sleep(2)
+        self._push_hadoop_source(is_dryrun)
         mvn_build = "mvn package -Pdist,native -DskipTests -Dtar -Dmaven.javadoc.skip=true"
         mvn_build += " -Dhadoop-aws-package"
         # Skip slow BOM generation
