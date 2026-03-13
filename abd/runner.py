@@ -7,8 +7,8 @@ from typing import Callable, MutableMapping
 
 from abd.config.phase import ConfigTask
 from abd.context import App
-from abd.job.job import Job
-from abd.job.phases import Task, TaskId, PhaseType
+from abd.job.job import Job, TaskIdSet
+from abd.job.phases import Task, TaskId
 from abd.project import ExitCode
 
 log = logging.getLogger(__name__)
@@ -25,8 +25,8 @@ class ExecutionPlan:
         self.job = job
         for c_id, c_phase in job.get_tasks().items():
             deps = c_phase.dependencies()
-            if c_id != ConfigTask.phase_id:
-                deps.add(ConfigTask.phase_id)  # all tasks depend on config phase
+            if c_id != ConfigTask.task_id:
+                deps.add(ConfigTask.task_id)  # all tasks depend on config phase
 
             self.parents[c_id] = deps
             for p_id in self.parents[c_id]:
@@ -35,22 +35,6 @@ class ExecutionPlan:
                 self.children[p_id].add(c_id)
             if c_id not in self.children:
                 self.children[c_id] = set()
-
-    def _tasks_in_phase(self, phase_type: PhaseType, name_filter: str | None) -> set[TaskId]:
-        tasks = set()
-        for task_id in self.children.keys():
-            try:
-                task = self.job.get_tasks()[task_id]
-            except KeyError:
-                e = f"Required task {task_id} not found in job tasks!"
-                log.error(e)
-                raise RuntimeError(e)
-            if task.phase_id.phase_type == phase_type and \
-                    (not name_filter or task.phase_id.name == name_filter):
-                tasks.add(task_id)
-            else:
-                log.debug(f"Skipping task {task_id} (name filter {name_filter})")
-        return tasks
 
     def _collect_needed(self, targets: set[TaskId]) -> set[TaskId]:
         needed = set()
@@ -64,6 +48,14 @@ class ExecutionPlan:
             stack.extend(self.parents.get(t, []))
         return needed
 
+    def _propagate_cached(self, cached_tasks: TaskIdSet):
+        """ For each t in cached_tasks, mark everything it depends on as also
+        cached, modifying `cached_tasks` """
+        to_add = set()
+        for t in cached_tasks.get():
+            to_add.update(self.parents.get(t, []))
+        cached_tasks.get().update(to_add)
+
     def _compute_in_degree(self, needed: set[TaskId]) -> MutableMapping[TaskId, int]:
         in_degree = {}
         for t in needed:
@@ -72,14 +64,16 @@ class ExecutionPlan:
             in_degree[t] = sum(1 for p in self.parents[t] if p in needed)
         return in_degree
 
-    def run_parallel(self, phase: PhaseType, execute_fn: Callable[[Task], None],
-                     task_name: str | None = None, max_threads: int = 4) -> ExitCode:
+    def run_parallel(self, target_task: str, execute_fn: Callable[[Task, bool], None],
+                     cached_tasks: TaskIdSet, max_threads: int = 4) -> ExitCode:
         # Only include tasks required for target phase
-        targets = self._tasks_in_phase(phase, task_name)
+        targets = TaskIdSet(self.job, set([target_task])).get()
         needed = self._collect_needed(targets)
-        log.debug(f"{len(needed)} tasks needed for phase {phase} w/ {len(targets)} targets")
+        log.debug(f"{len(needed)} tasks needed for {target_task} w/ {len(targets)} targets")
         # Calculate number of dependencies remaining for each task
         in_degree = self._compute_in_degree(needed)
+        # If we don't want to rebuild something, also avoid rebuilding stuff it depends on
+        self._propagate_cached(cached_tasks)
         # Init ready queue with tasks without dependencies
         ready = SimpleQueue()
         num_waiters = len(needed)
@@ -115,8 +109,8 @@ class ExecutionPlan:
                     else:
                         continue
                 task = self.job.get_tasks()[t]
-                log.debug(f"Worker {idx} executing task {task.phase_id}")
-                execute_fn(self.job.get_tasks()[t])
+                log.debug(f"Worker {idx} executing task {task.task_id}")
+                execute_fn(self.job.get_tasks()[t], t in cached_tasks)
 
                 # update finished task's dependencies
                 for c in self.children.get(t, []):
@@ -152,11 +146,13 @@ class NewRunner:
         self.app = app
         self.job = Job()
 
-    def run(self, phase: PhaseType, task_name: str | None = None) -> ExitCode:
+    def run(self, target_str: str, cached_tasks: set[str]) -> ExitCode:
         plan = ExecutionPlan(self.job)
+        cached_ids = TaskIdSet(self.job, cached_tasks)
 
-        def execute(task: Task):
-            log.info(f"Executing task: {task.phase_id}")
-            task.run(self.app, self.app.args.is_cached, self.app.args.is_dryrun)
+        def execute(task: Task, is_cached: bool):
+            cstatus = " (cached)" if is_cached else ""
+            log.info(f"Executing task: {task.task_id}{cstatus}")
+            task.run(self.app, is_cached, self.app.args.is_dryrun)
 
-        return plan.run_parallel(phase, execute, task_name=task_name)
+        return plan.run_parallel(target_str, execute, cached_ids)

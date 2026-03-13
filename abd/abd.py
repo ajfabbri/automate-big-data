@@ -29,7 +29,7 @@ def do_config(is_interactive: bool, ui: Ui) -> Config:
 
 def do_build(app: App) -> ExitCode:
     runner = NewRunner(app)
-    return runner.run(PhaseType.BUILD)
+    return runner.run(f"{PhaseType.BUILD}:", app.args.cached)
 
 
 def do_deploy(app: App, args: argparse.Namespace) -> ExitCode:
@@ -41,7 +41,7 @@ def do_deploy(app: App, args: argparse.Namespace) -> ExitCode:
             for cname in Containers.list(name_filter):
                 print(cname)
         case "run":
-            return runner.run(PhaseType.DEPLOY)
+            return runner.run(f"{PhaseType.DEPLOY}:", app.args.cached)
         case "stop":
             return Containers.stop(name_filter)
         case "attach":
@@ -54,9 +54,6 @@ def do_deploy(app: App, args: argparse.Namespace) -> ExitCode:
 
 
 def do_exec(app: App) -> ExitCode:
-    # default to cached mode on exec; user can run a build or deploy without
-    # --cached if they really want to rebuild things
-    app.args.is_cached = True
     if app.args.raw.shell:
         cmd = app.args.raw.shell.strip()
         ConfigTask().run(app, is_cached=False, is_dryrun=app.args.is_dryrun)
@@ -72,8 +69,10 @@ def do_exec(app: App) -> ExitCode:
             return 1
         return 0
     else:
+        err = 0
         runner = NewRunner(app)
-        err = runner.run(PhaseType.EXECUTE, task_name=app.args.task_name)
+        task_str = app.args.task_str if app.args.task_str else f"{PhaseType.EXECUTE}:"
+        err = runner.run(task_str, app.args.cached)
         if err != 0:
             log.error(f"⛔️ Error {err} executing task(s).")
         return err
@@ -113,12 +112,6 @@ def add_interactive_opt(parser: argparse.ArgumentParser):
     parser.add_argument("-i", "--interactive", action="store_true", help="Run in interactive mode")
 
 
-def add_cached_opt(parser: argparse.ArgumentParser):
-    # TODO granular control over which build / deploy tasks are cached
-    parser.add_argument("-c", "--cached", action="store_true",
-                        help="Skip updating dependencies / images / build")
-
-
 def add_name_opt(parser: argparse.ArgumentParser):
     parser.add_argument("-n", "--name", help="name filter")
 
@@ -127,8 +120,21 @@ def add_dryrun_opt(parser: argparse.ArgumentParser):
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing.")
 
 
+TASKID_HELP = "    TASK_STR can be a literal '<phase>:<name>' string \n" \
+    + "        OR a '<phase>:' string to match all tasks in that phase, \n" \
+    + "        OR just a '<name>' string to match any tasks with that name, \n" \
+    + "        OR 'all' to match all tasks."
+
+
+def add_cached_opt(parser: argparse.ArgumentParser):
+    help = "Skip updating artifacts for specific tasks. Default \"all\"."
+    parser.add_argument("-c", "--cached", metavar="TASK_STR", nargs="*", default="all",
+                        help=help)
+
+
 def add_task_opt(parser: argparse.ArgumentParser):
-    parser.add_argument("--task", "-t", help="Run a specific task by name.")
+    parser.add_argument("--task", "-t", metavar="TASK_STR",
+                        help="Run specific task(s) by id.")
 
 
 def parse_args(parser: argparse.ArgumentParser) -> Args:
@@ -145,11 +151,11 @@ def parse_args(parser: argparse.ArgumentParser) -> Args:
 
     logging.basicConfig(level=log_level, format='%(name)s - %(levelname)s - %(message)s')
     dry = args.dry_run if hasattr(args, 'dry_run') else False
-    cached = args.cached if hasattr(args, 'cached') else False
+    cached = args.cached if hasattr(args, 'cached') else set()
     interactive = args.interactive if hasattr(args, 'interactive') else False
     task = args.task if hasattr(args, 'task') else None
-    return Args(is_dryrun=dry, is_cached=cached, is_interactive=interactive,
-                task_name=task, raw=args)
+    return Args(is_dryrun=dry, cached=cached, is_interactive=interactive,
+                task_str=task, raw=args)
 
 
 def main() -> ExitCode:
@@ -163,7 +169,7 @@ def main() -> ExitCode:
     config_p = subparsers.add_parser("config", help="Settings and config generation.")
     add_interactive_opt(config_p)
     # build
-    build_p = subparsers.add_parser("build", help="Build software and images")
+    build_p = subparsers.add_parser("build", help=f"Build software and images.\n{TASKID_HELP}")
     add_interactive_opt(build_p)
     add_cached_opt(build_p)
     add_dryrun_opt(build_p)
@@ -172,7 +178,7 @@ def main() -> ExitCode:
     deploy_sub = deploy_p.add_subparsers(dest="deploy_cmd", required=True)
     d_list_p = deploy_sub.add_parser("list", help="List deployment (hosts, etc.)")
     add_name_opt(d_list_p)
-    d_run_p = deploy_sub.add_parser("run", help="Run deployment")
+    d_run_p = deploy_sub.add_parser("run", help=f"Run deployment.\n{TASKID_HELP}")
     add_cached_opt(d_run_p)
     add_interactive_opt(d_run_p)
     add_dryrun_opt(d_run_p)
@@ -181,9 +187,11 @@ def main() -> ExitCode:
     d_attach_p = deploy_sub.add_parser("attach", help="Attach to a running host / container")
     add_name_opt(d_attach_p)
     # execute
-    exec_p = subparsers.add_parser("exec", help="Execute commands on cluster nodes.")
+    help = "Execute tasks / commands.\n" + TASKID_HELP
+    exec_p = subparsers.add_parser("exec", help=help)
     add_dryrun_opt(exec_p)
     add_task_opt(exec_p)
+    add_cached_opt(exec_p)
     exec_p.add_argument("--shell", "-s", help="Run this shell command instead of registered task.")
 
     # tasks

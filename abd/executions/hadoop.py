@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 class HadoopSanity(Script):
     """Sanity check for Hadoop cluster."""
-    phase_id = TaskId("hadoop-sanity", PhaseType.EXECUTE)
+    task_id = TaskId("hadoop-sanity", PhaseType.EXECUTE)
 
     @override
     def get_commands(self) -> List[str]:
@@ -29,11 +29,11 @@ class HadoopSanity(Script):
 
 
 class HadoopSanityTask(Task):
-    phase_id = TaskId("hadoop-sanity", PhaseType.EXECUTE)
+    task_id = TaskId("hadoop-sanity", PhaseType.EXECUTE)
 
     @override
     def dependencies(self):
-        return {InstallHadoop.phase_id}
+        return {InstallHadoop.task_id}
 
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):
         ret = HadoopSanity().run_result(arg.hosts, is_dryrun)
@@ -45,11 +45,11 @@ class HadoopSanityTask(Task):
 
 
 class S3ARoundTrip(Task):
-    phase_id = TaskId("s3a-roundtrip", PhaseType.EXECUTE)
+    task_id = TaskId("s3a-roundtrip", PhaseType.EXECUTE)
 
     @override
     def dependencies(self):
-        return {InstallHadoop.phase_id}
+        return {InstallHadoop.task_id}
 
     def _check_err(self, err: int, msg: str):
         if err != 0:

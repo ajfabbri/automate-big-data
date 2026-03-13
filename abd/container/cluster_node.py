@@ -128,7 +128,7 @@ class ClusterNodeBuild(ContainerBuild):
             docker exec {host} bash -c
             'if [ ! -f /opt/hadoop/bin/hadoop ]; then exit 1; fi'
             """
-            (ret, _) = cmd.run(c)
+            (ret, _) = cmd.run(c, quiet=True)
             if ret != 0:
                 any_missing = True
                 log.debug(f"check_hadoop_install({host}) -> False")
@@ -167,11 +167,11 @@ class ClusterNodeBuild(ContainerBuild):
 
 
 class NodeBuildTask(Task):
-    phase_id = TaskId("cluster-node", PhaseType.BUILD)
+    task_id = TaskId("cluster-node", PhaseType.BUILD)
 
     @override
     def dependencies(self) -> Set[TaskId]:
-        # XXX TODO? return {HadoopBuild.HadoopBuildTask.phase_id}
+        # XXX TODO? return {HadoopBuild.HadoopBuildTask.task_id}
         return set()
 
     @override
@@ -184,11 +184,11 @@ class NodeBuildTask(Task):
 
 
 class NodeDeployTask(Task):
-    phase_id = TaskId("start-cluster-nodes", PhaseType.DEPLOY)
+    task_id = TaskId("start-cluster-nodes", PhaseType.DEPLOY)
 
     @override
     def dependencies(self) -> Set[TaskId]:
-        return {NodeBuildTask.phase_id, NetworkTask.phase_id}
+        return {NodeBuildTask.task_id, NetworkTask.task_id}
 
     @override
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):

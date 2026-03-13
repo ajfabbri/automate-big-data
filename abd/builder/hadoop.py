@@ -234,7 +234,7 @@ class HadoopBuild(ContainerBuild):
 
 
 class GitHadoop(Task):
-    phase_id = TaskId("git-hadoop", PhaseType.BUILD)
+    task_id = TaskId("git-hadoop", PhaseType.BUILD)
 
     # no dependencies
 
@@ -253,11 +253,11 @@ class GitHadoop(Task):
 
 
 class HadoopBuildImageTask(Task):
-    phase_id = TaskId("hadoop-build-image", PhaseType.BUILD)
+    task_id = TaskId("hadoop-build-image", PhaseType.BUILD)
 
     @override
     def dependencies(self) -> Set[TaskId]:
-        return set([GitHadoop.phase_id])
+        return set([GitHadoop.task_id])
 
     @override
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):
@@ -268,11 +268,11 @@ class HadoopBuildImageTask(Task):
 
 
 class DeployHadoopBuildContainer(Task):
-    phase_id = TaskId("hadoop-build", PhaseType.DEPLOY)
+    task_id = TaskId("hadoop-build", PhaseType.DEPLOY)
 
     @override
     def dependencies(self) -> Set[TaskId]:
-        return {HadoopBuildImageTask.phase_id}
+        return {HadoopBuildImageTask.task_id}
 
     @override
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):
@@ -283,12 +283,12 @@ class DeployHadoopBuildContainer(Task):
 
 
 class BuildHadoopRelease(Task):
-    phase_id = TaskId("hadoop-release", PhaseType.BUILD)
+    task_id = TaskId("hadoop-release", PhaseType.BUILD)
 
     @override
     def dependencies(self) -> Set[TaskId]:
-        return {DeployHadoopBuildContainer.phase_id,
-                GitHadoop.phase_id}
+        return {DeployHadoopBuildContainer.task_id,
+                GitHadoop.task_id}
 
     @override
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):
@@ -303,11 +303,11 @@ class BuildHadoopRelease(Task):
 
 
 class InstallHadoop(Task):
-    phase_id = TaskId("hadoop-install", PhaseType.DEPLOY)
+    task_id = TaskId("hadoop-install", PhaseType.DEPLOY)
 
     @override
     def dependencies(self) -> Set[TaskId]:
-        return {BuildHadoopRelease.phase_id, ClusterTask.phase_id}
+        return {BuildHadoopRelease.task_id, ClusterTask.task_id}
 
     def _install_hadoop(self, app: App, is_cached: bool, is_dryrun: bool):
         n_build = ClusterNodeBuild(app)

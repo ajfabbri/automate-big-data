@@ -2,7 +2,7 @@ from pathlib import Path
 import re
 from typing import NamedTuple
 
-type ExitCode = int
+ExitCode = int
 
 
 class CmdResult(NamedTuple):

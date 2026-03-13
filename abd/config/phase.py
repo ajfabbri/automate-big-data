@@ -6,7 +6,7 @@ from abd.job.phases import Task, TaskId, PhaseType
 
 
 class ConfigTask(Task):
-    phase_id = TaskId("config", PhaseType.CONFIGURE)
+    task_id = TaskId("config", PhaseType.CONFIGURE)
 
     def __init__(self):
         self.config = None

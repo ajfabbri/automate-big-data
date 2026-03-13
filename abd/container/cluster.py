@@ -11,12 +11,12 @@ log = logging.getLogger(__name__)
 
 class ClusterTask(Task):
     """ Top-level cluster deploy task. """
-    phase_id = TaskId("cluster", PhaseType.DEPLOY)
+    task_id = TaskId("cluster", PhaseType.DEPLOY)
 
     @override
     def dependencies(self):
         # all nodes must be deployed before cluster is ready
-        return {NodeDeployTask.phase_id, LocalstackTask.phase_id}
+        return {NodeDeployTask.task_id, LocalstackTask.task_id}
 
     @override
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):
