@@ -187,7 +187,7 @@ class HadoopBuild(ContainerBuild):
         """ Find hadoop path, Returns (path, "") or (None, command_output) on failure. """
         dist_dir = Path(self.docker_home_dir) / "hadoop" / "hadoop-dist" / "target"
         # TODO use Host run method instead of raw-dogging docker container
-        list_cmd = f"docker exec hadoop-build bash -c 'find {dist_dir} -name hadoop-*.tar.gz'"
+        list_cmd = f"docker exec hadoop-build bash -lc 'find {dist_dir} -name hadoop-*.tar.gz'"
         (exit_code, output) = cmd.run(list_cmd)
         paths = [Path(line.strip()) for line in output.splitlines() if line.strip()]
         # prefers newer versions, and prefer release builds over -SNAPSHOT builds
