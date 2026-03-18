@@ -40,17 +40,55 @@ class Install:
 
 
 @dataclass
-class BuildCfg:
+class GitSource:
     git_path: str
-    # git ref to checkout, or "" for default
     git_ref: str
+
+
+@dataclass
+class TarBuild:
+    tar_path: str
+
+
+type BuildSource = GitSource | TarBuild
+
+
+def _get_build_source(git_path: str | None, git_ref: str | None,
+                      tar_path: str | None) -> BuildSource:
+    if tar_path:
+        return TarBuild(tar_path)
+    else:
+        if not (git_path and git_ref):
+            raise RuntimeError("Build config must contain git ref and path, or tar path")
+    return GitSource(git_path=git_path, git_ref=git_ref)
+
+
+@dataclass
+class BuildCfg:
+    source: GitSource | TarBuild
 
     @classmethod
     def get_default_git_ref(cls) -> str:
         return "main"
 
     def get_git_ref(self) -> str:
-        return self.git_ref or self.get_default_git_ref()
+        if isinstance(self.source, GitSource):
+            return self.source.git_ref or self.get_default_git_ref()
+        else:
+            raise RuntimeError("get_git_ref() - no git source configured")
+
+    def get_source(self) -> BuildSource:
+        return self.source
+
+    def get_git_source(self) -> GitSource:
+        if not isinstance(self.source, GitSource):
+            raise RuntimeError("get_git_source() - no git source configured")
+        return self.source
+
+    def get_tar_build(self) -> TarBuild:
+        if not isinstance(self.source, TarBuild):
+            raise RuntimeError("get_tar_build() - no tar source configured")
+        return self.source
 
 
 @dataclass
@@ -61,19 +99,20 @@ class DeployCfg:
 
 
 class HadoopCfg(BuildCfg):
-
     @override
     @classmethod
     def get_default_git_ref(cls) -> str:
         return "trunk"
 
-    def __init__(self, git_path: str, git_ref: str | None = None):
-        ref = git_ref or self.get_default_git_ref()
-        super().__init__(git_path, ref)
+    @classmethod
+    def load(cls, git_path: str | None = None, git_ref: str | None = None,
+             tar_path: str | None = None) -> 'HadoopCfg':
+        return HadoopCfg(_get_build_source(git_path, git_ref, tar_path))
 
     @classmethod
     def get_default(cls) -> 'HadoopCfg':
-        return HadoopCfg(git_path=DEFAULT_HADOOP_PATH, git_ref=DEFAULT_HADOOP_REF)
+        default_src = GitSource(git_path=DEFAULT_HADOOP_PATH, git_ref=DEFAULT_HADOOP_REF)
+        return HadoopCfg(default_src)
 
 
 class CloudstoreCfg(BuildCfg):
@@ -82,13 +121,15 @@ class CloudstoreCfg(BuildCfg):
     def get_default_git_ref(cls) -> str:
         return "main"
 
-    def __init__(self, git_path: str, git_ref: str | None = None):
-        ref = git_ref or self.get_default_git_ref()
-        super().__init__(git_path, ref)
+    @classmethod
+    def load(cls, git_path: str | None = None, git_ref: str | None = None,
+             tar_path: str | None = None) -> 'CloudstoreCfg':
+        return CloudstoreCfg(_get_build_source(git_path, git_ref, tar_path))
 
     @classmethod
     def get_default(cls) -> 'CloudstoreCfg':
-        return CloudstoreCfg(git_path=CLOUDSTORE_GIT_URI, git_ref=CLOUSTORE_GIT_REF)
+        default_src = GitSource(git_path=CLOUDSTORE_GIT_URI, git_ref=CLOUSTORE_GIT_REF)
+        return CloudstoreCfg(default_src)
 
 
 @dataclass
@@ -137,9 +178,9 @@ class Loader:
         for key, cfg in data.items():
             match key:
                 case BuildType.HADOOP:
-                    builds[key] = HadoopCfg(**cfg)
+                    builds[key] = HadoopCfg.load(**cfg)
                 case BuildType.CLOUDSTORE:
-                    builds[key] = CloudstoreCfg(**cfg)
+                    builds[key] = CloudstoreCfg.load(**cfg)
                 case _:
                     log.error(f"Unknown build type in config: {key}")
         return builds
@@ -206,6 +247,20 @@ class Loader:
             raise FileNotFoundError(f"Config template not found: {self.CONF_TEMPLATE}")
         return config
 
+    def _prompt_source(self, name: str, ui: Ui, default: BuildSource) -> BuildSource:
+        default_git = isinstance(default, GitSource)
+        is_git = ui.prompt_bool(f"{name}: Use git source?", default_git)
+        if is_git:
+            default_ref = default.git_ref if default_git else "main"
+            default_path = default.git_path if default_git else Path("build") / name
+            git_ref = ui.prompt_str(f"{name}: git ref?", default_ref)
+            git_path = ui.prompt_str(f"{name}: git path?", default_path)
+            return GitSource(git_ref, git_path)
+        else:
+            default_tar = default.tar_path if not default_git else Path("build") / "example.tar"
+            path_str = ui.prompt_str(f"{name}: tar path?", default_tar)
+            return TarBuild(path_str)
+
     def create_interactive(self, ui: Ui) -> Config:
         """Edit or create a new configuration, interactively."""
 
@@ -228,17 +283,10 @@ class Loader:
             h_defaults = existing_hadoop_cfg or HadoopCfg.get_default()
             c_defaults = existing_cloudstore_cfg or CloudstoreCfg.get_default()
             num_nodes = ui.prompt_int("Number of Hadoop nodes", DEFAULT_NUM_NODES)
-            hadoop_git_path = ui.prompt_str("Hadoop git path (will fetch if doesn't exist)",
-                                            h_defaults.git_path)
-            hadoop_git_ref = ui.prompt_str("Hadoop git ref (HEAD to skip checkout)",
-                                           h_defaults.git_ref)
-            cloudstore_git_path = ui.prompt_str("Cloudstore git path (empty to fetch latest)",
-                                                c_defaults.git_path)
-            cloudstore_git_ref = ui.prompt_str("Cloudstore git ref (HEAD to skip checkout)",
-                                               c_defaults.git_ref)
-            builds[BuildType.HADOOP] = HadoopCfg(git_path=hadoop_git_path, git_ref=hadoop_git_ref)
-            builds[BuildType.CLOUDSTORE] = CloudstoreCfg(git_path=cloudstore_git_path,
-                                                         git_ref=cloudstore_git_ref)
+            hadoop_src = self._prompt_source("Hadoop", ui, h_defaults.source)
+            cloudstore_src = self._prompt_source("Cloudstore", ui, c_defaults.source)
+            builds[BuildType.HADOOP] = HadoopCfg(hadoop_src)
+            builds[BuildType.CLOUDSTORE] = CloudstoreCfg(cloudstore_src)
 
             deploys["cluster-node"] = DeployCfg(num_nodes, "cluster-node",
                                                 [Install(BuildType.HADOOP, "/home/hadoop"),
