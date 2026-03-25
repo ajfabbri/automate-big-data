@@ -93,6 +93,7 @@ class HadoopBuild(ContainerBuild):
         ENV MAVEN_OPTS="-Xms256m -Xmx8g"
         WORKDIR "/home/{self.user}"
         RUN mkdir -p hadoop; chown {self.user}:{self.user} hadoop
+        RUN mkdir -p .m2; chown {self.user}:{self.user} .m2
         """
         u_builder = ImageBuilder(self.get_image_name(), base_dockerfile.parent)
         return u_builder.build_input(docker_input, is_dryrun)
@@ -131,6 +132,7 @@ class HadoopBuild(ContainerBuild):
                 -v "{self.local_hadoop}:{self.docker_home_dir}/hadoop-host"
                 -v "{self.local_cloudstore}:{self.docker_home_dir}/cloudstore"
                 -v "{self.local_home}/.gnupg:{self.docker_home_dir}/.gnupg"
+                -v "hadoop-build-m2:{self.docker_home_dir}/.m2"
                 -u "{self.uid}"
                 --network "{self.app.container_network}"
                 --name "{HADOOP_BUILD_CONTAINER}"
