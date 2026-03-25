@@ -10,22 +10,14 @@ from abd.project import Project
 from abd.ui import Ui
 
 log = logging.getLogger(__name__)
-
+#
+# Raw type definitions for config (de)serialization to TOML
+#
 DEFAULT_NUM_NODES = 3
-DEFAULT_HADOOP_PATH = "build/hadoop"
-DEFAULT_HADOOP_REF = "trunk"
-
-CLOUDSTORE_GIT_URI = "git@github.com:steveloughran/cloudstore.git"
-CLOUSTORE_GIT_REF = "main"
-HADOOP_GIT_URI = "git@github.com:apache/hadoop.git"
 
 # TODO move to util types module?
 type Primitive = str | int | bool | list | dict
 type PrimitiveDict = Dict[str, str | int | bool | list | dict]
-
-#
-# Raw type definitions for (de)serialization to TOML
-#
 
 
 class BuildType(StrEnum):
@@ -53,13 +45,24 @@ class TarBuild:
 type BuildSource = GitSource | TarBuild
 
 
-def _get_build_source(git_path: str | None, git_ref: str | None,
+def _default_git_ref(build_name: str) -> str:
+    match build_name:
+        case BuildType.HADOOP:
+            return HadoopCfg.get_default_git_ref()
+        case BuildType.CLOUDSTORE:
+            return CloudstoreCfg.get_default_git_ref()
+        case _:
+            return "main"
+
+
+def _get_build_source(build_name: str, git_path: str | None, git_ref: str | None,
                       tar_path: str | None) -> BuildSource:
     if tar_path:
         return TarBuild(tar_path)
     else:
-        if not (git_path and git_ref):
-            raise RuntimeError("Build config must contain git ref and path, or tar path")
+        if not git_path:
+            raise RuntimeError("Build config must contain git_path, or tar_path")
+        git_ref = git_ref or _default_git_ref(build_name)
     return GitSource(git_path=git_path, git_ref=git_ref)
 
 
@@ -98,16 +101,23 @@ class DeployCfg:
     installs: list[Install]
 
 
+DEFAULT_HADOOP_PATH = "build/hadoop"
+DEFAULT_HADOOP_REF = "trunk"
+CLOUDSTORE_GIT_URI = "git@github.com:steveloughran/cloudstore.git"
+CLOUSTORE_GIT_REF = "main"
+HADOOP_GIT_URI = "git@github.com:apache/hadoop.git"
+
+
 class HadoopCfg(BuildCfg):
     @override
     @classmethod
     def get_default_git_ref(cls) -> str:
-        return "trunk"
+        return DEFAULT_HADOOP_REF
 
     @classmethod
     def load(cls, git_path: str | None = None, git_ref: str | None = None,
              tar_path: str | None = None) -> 'HadoopCfg':
-        return HadoopCfg(_get_build_source(git_path, git_ref, tar_path))
+        return HadoopCfg(_get_build_source("hadoop", git_path, git_ref, tar_path))
 
     @classmethod
     def get_default(cls) -> 'HadoopCfg':
@@ -124,7 +134,7 @@ class CloudstoreCfg(BuildCfg):
     @classmethod
     def load(cls, git_path: str | None = None, git_ref: str | None = None,
              tar_path: str | None = None) -> 'CloudstoreCfg':
-        return CloudstoreCfg(_get_build_source(git_path, git_ref, tar_path))
+        return CloudstoreCfg(_get_build_source("cloudstore", git_path, git_ref, tar_path))
 
     @classmethod
     def get_default(cls) -> 'CloudstoreCfg':
@@ -176,13 +186,18 @@ class Loader:
     def load_builds(self, data: dict) -> dict[str, BuildCfg]:
         builds = {}
         for key, cfg in data.items():
-            match key:
-                case BuildType.HADOOP:
-                    builds[key] = HadoopCfg.load(**cfg)
-                case BuildType.CLOUDSTORE:
-                    builds[key] = CloudstoreCfg.load(**cfg)
-                case _:
-                    log.error(f"Unknown build type in config: {key}")
+            try:
+                match key:
+                    case BuildType.HADOOP:
+                        builds[key] = HadoopCfg.load(**cfg)
+                    case BuildType.CLOUDSTORE:
+                        builds[key] = CloudstoreCfg.load(**cfg)
+                    case _:
+                        log.error(f"Unknown build type in config: {key}")
+            except Exception as e:
+                log.error(f"Error loading build config '{key}': {e}")
+                log.debug(f"Build config data: {data}")
+                raise e
         return builds
 
     def load_deploys(self, data: dict) -> dict[str, DeployCfg]:
@@ -316,9 +331,20 @@ class Loader:
         else:
             return self.ensure_exists()
 
+    @classmethod
+    def _flatten_sources(cls, config: dict):
+        """ Modify `config`, flattening any 'source' objects (inlining their
+            fields, removing source key)"""
+        for build_cfg in config.get("build", {}).values():
+            if "source" in build_cfg:
+                source_cfg = build_cfg.pop("source")
+                for key, val in source_cfg.items():
+                    build_cfg[key] = val
+
     def save(self, config: Config, filename: Optional[Path] = None):
         """Save the given configuration to a file."""
         data = config.to_dict()
+        self._flatten_sources(data)
         filename = filename or Path(self.CONF_FILENAME)
         filename = Project.get_project_root() / filename
         with open(filename, 'wb') as f:
