@@ -24,7 +24,7 @@ class HadoopS3aIntegration(Task):
 
     def run(self, arg, is_cached: bool, is_dryrun: bool):
         host = Container(HadoopBuild.get_container_name())
-        cmd = "cd $HOME/hadoop/hadoop-tools/hadoop-aws && mvn -Dparallel-tests clean verify"
+        cmd = "cd $HOME/hadoop/hadoop-tools/hadoop-aws && mvn -Dparallel-tests verify"
         filter_re = f'{ERROR_RE}|Tests run:'
         failure_re = re.compile(ERROR_RE)
         failures = []
