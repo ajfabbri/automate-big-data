@@ -3,6 +3,7 @@ import re
 from typing import override
 
 from abd.builder.hadoop import BuildHadoopRelease, HadoopBuild
+from abd.container.localstack import LocalstackTask
 from abd.host import Container
 from abd.job.phases import PhaseType, Task, TaskId
 from abd.project import ExitCode
@@ -19,7 +20,7 @@ class HadoopS3aIntegration(Task):
 
     @override
     def dependencies(self):
-        return {BuildHadoopRelease.task_id}
+        return {BuildHadoopRelease.task_id, LocalstackTask.task_id}
 
     def run(self, arg, is_cached: bool, is_dryrun: bool):
         host = Container(HadoopBuild.get_container_name())

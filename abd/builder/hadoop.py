@@ -167,7 +167,7 @@ class HadoopBuild(ContainerBuild):
             log.warning("⚠️MAVEN_OPTS not set in container; builds may run out of memory.")
             sleep(2)
         self._push_hadoop_source(is_dryrun)
-        mvn_build = "mvn package -Pdist,native -DskipTests -Dtar -Dmaven.javadoc.skip=true"
+        mvn_build = "mvn install -Pdist,native -DskipTests -Dtar -Dmaven.javadoc.skip=true"
         mvn_build += " -Dhadoop-aws-package"
         # Skip slow BOM generation
         mvn_build += " -Dcyclonedx.skip=true"
