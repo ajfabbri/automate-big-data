@@ -255,7 +255,7 @@ class Loader:
             default_path = default.git_path if default_git else Path("build") / name
             git_ref = ui.prompt_str(f"{name}: git ref?", default_ref)
             git_path = ui.prompt_str(f"{name}: git path?", default_path)
-            return GitSource(git_ref, git_path)
+            return GitSource(git_path=git_path, git_ref=git_ref)
         else:
             default_tar = default.tar_path if not default_git else Path("build") / "example.tar"
             path_str = ui.prompt_str(f"{name}: tar path?", default_tar)

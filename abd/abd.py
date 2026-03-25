@@ -120,16 +120,17 @@ def add_dryrun_opt(parser: argparse.ArgumentParser):
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing.")
 
 
-TASKID_HELP = "    TASK_STR can be a literal '<phase>:<name>' string \n" \
-    + "        OR a '<phase>:' string to match all tasks in that phase, \n" \
-    + "        OR just a '<name>' string to match any tasks with that name, \n" \
-    + "        OR 'all' to match all tasks."
+TASKID_HELP = "    TASK_STR '<phase>:<name>' to match one task. \n" \
+    + "        Use '<phase>:' match all tasks in that phase. \n" \
+    + "        Otherwise, '<name>' to match any tasks with that name, \n" \
+    + "        where 'all' matches all tasks. Separate multiple TASK_STRs \n" \
+    + "        with `,`."
 
 
 def add_cached_opt(parser: argparse.ArgumentParser):
     help = "Skip updating artifacts for specific tasks. Default \"all\"."
-    parser.add_argument("-c", "--cached", metavar="TASK_STR", nargs="*", default=[],
-                        const=["all"], help=help)
+    parser.add_argument("-c", "--cached", metavar="TASK_STR", nargs="?", default=None,
+                        const="all", help=help)
 
 
 def add_task_opt(parser: argparse.ArgumentParser):
@@ -151,7 +152,14 @@ def parse_args(parser: argparse.ArgumentParser) -> Args:
 
     logging.basicConfig(level=log_level, format='%(name)s - %(levelname)s - %(message)s')
     dry = args.dry_run if hasattr(args, 'dry_run') else False
-    cached = set(args.cached) if hasattr(args, 'cached') else set()
+    if hasattr(args, 'cached') and args.cached is not None:
+        split = args.cached.split(",")
+        if len(split) == 1 and split[0] == '':
+            split[0] = "all"
+        cached = set(split)
+    else:
+        cached = set()
+    log.debug(f"Requesting cached tasks for {cached}.")
     interactive = args.interactive if hasattr(args, 'interactive') else False
     task = args.task if hasattr(args, 'task') else None
     return Args(is_dryrun=dry, cached=cached, is_interactive=interactive,
@@ -187,8 +195,8 @@ def main() -> ExitCode:
     d_attach_p = deploy_sub.add_parser("attach", help="Attach to a running host / container")
     add_name_opt(d_attach_p)
     # execute
-    help = "Execute tasks / commands.\n" + TASKID_HELP
-    exec_p = subparsers.add_parser("exec", help=help)
+    help = "Execute tasks / commands."
+    exec_p = subparsers.add_parser("exec", help=help, epilog=TASKID_HELP)
     add_dryrun_opt(exec_p)
     add_task_opt(exec_p)
     add_cached_opt(exec_p)
