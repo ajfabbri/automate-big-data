@@ -33,13 +33,13 @@ class HadoopBuild(ContainerBuild):
         if hcfg:
             self.h_cfg = hcfg
             proj_dir = Project.get_project_root()
-            hpath = Path(self.h_cfg.git_path)
+            hpath = Path(self.h_cfg.get_git_source().git_path)
             if not hpath.is_absolute():
                 hpath = proj_dir / hpath
             self.local_hadoop = hpath
             if ccfg:
                 self.c_cfg = ccfg
-                cpath = Path(self.c_cfg.git_path)
+                cpath = Path(self.c_cfg.get_git_source().git_path)
                 if not cpath.is_absolute():
                     cpath = proj_dir / cpath
                 self.local_cloudstore = cpath
@@ -67,7 +67,7 @@ class HadoopBuild(ContainerBuild):
                 return 0
 
         # Build base image
-        hadoop_path = Path(self.h_cfg.git_path)
+        hadoop_path = Path(self.h_cfg.get_git_source().git_path)
         if self.app.sysinfo.get_cpu_arch() in ["arm64", "aarch64"]:
             docker_file = HADOOP_BASE_DOCKERFILE_ARM
         else:
@@ -267,7 +267,7 @@ class GitHadoop(Task):
         h_cfg = arg.get_config().get_build_cfg(BuildType.HADOOP)
         if not h_cfg:
             raise RuntimeError("Hadoop build config not found.")
-        local_hadoop = Path(h_cfg.git_path)
+        local_hadoop = Path(h_cfg.get_git_source().git_path)
         # TODO is_dryrun
         git = Git(HADOOP_GIT_URI, local_hadoop, arg.ui)
         git.clone(h_cfg.get_git_ref(), is_interactive)

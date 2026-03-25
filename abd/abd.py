@@ -121,7 +121,7 @@ def add_dryrun_opt(parser: argparse.ArgumentParser):
 
 
 TASKID_HELP = "    TASK_STR '<phase>:<name>' to match one task. \n" \
-    + "        Use '<phase>:' match all tasks in that phase. \n" \
+    + "        Use '<phase>:' to match all tasks in that phase. \n" \
     + "        Otherwise, '<name>' to match any tasks with that name, \n" \
     + "        where 'all' matches all tasks. Separate multiple TASK_STRs \n" \
     + "        with `,`."
