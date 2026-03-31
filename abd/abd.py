@@ -29,7 +29,7 @@ def do_config(is_interactive: bool, ui: Ui) -> Config:
 
 def do_build(app: App) -> ExitCode:
     runner = NewRunner(app)
-    return runner.run(f"{PhaseType.BUILD}:", app.args.cached)
+    return runner.run(f"{PhaseType.BUILD}:", app.args.cached, single_thread=app.args.is_serial)
 
 
 def do_deploy(app: App, args: argparse.Namespace) -> ExitCode:
@@ -72,7 +72,7 @@ def do_exec(app: App) -> ExitCode:
         err = 0
         runner = NewRunner(app)
         task_str = app.args.task_str if app.args.task_str else f"{PhaseType.EXECUTE}:"
-        err = runner.run(task_str, app.args.cached)
+        err = runner.run(task_str, app.args.cached, single_thread=app.args.is_serial)
         if err != 0:
             log.error(f"⛔️ Error {err} executing task(s).")
         return err
@@ -162,8 +162,9 @@ def parse_args(parser: argparse.ArgumentParser) -> Args:
     log.debug(f"Requesting cached tasks for {cached}.")
     interactive = args.interactive if hasattr(args, 'interactive') else False
     task = args.task if hasattr(args, 'task') else None
+    is_serial = args.one_thread if hasattr(args, 'one_thread') else False
     return Args(is_dryrun=dry, cached=cached, is_interactive=interactive,
-                task_str=task, raw=args)
+                task_str=task, raw=args, is_serial=is_serial)
 
 
 def main() -> ExitCode:
@@ -201,6 +202,7 @@ def main() -> ExitCode:
     add_task_opt(exec_p)
     add_cached_opt(exec_p)
     exec_p.add_argument("--shell", "-s", help="Run this shell command instead of registered task.")
+    exec_p.add_argument("--one-thread", "-o", action="store_true", help="Only use one thread for tasks")
 
     # tasks
     tasks_p = subparsers.add_parser("tasks", help="Show registered tasks.")
