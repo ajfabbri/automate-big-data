@@ -14,6 +14,7 @@ class Args:
     cached: set[str]
     is_interactive: bool
     task_str: str | None
+    is_serial: bool
     # TODO finer granularity cached option?
     # cache_build: bool
     # cache_image: bool

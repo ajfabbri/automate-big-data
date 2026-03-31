@@ -153,7 +153,7 @@ class NewRunner:
         self.app = app
         self.job = Job()
 
-    def run(self, target_str: str, cached_tasks: set[str]) -> ExitCode:
+    def run(self, target_str: str, cached_tasks: set[str], single_thread=False) -> ExitCode:
         plan = ExecutionPlan(self.job)
         cached_ids = TaskIdSet(self.job, cached_tasks)
 
@@ -165,4 +165,8 @@ class NewRunner:
             elapsed = time.monotonic() - start_timestamp
             log.info(f"✔️ {task.task_id} finished in {elapsed:.2f}s{cstatus}")
 
-        return plan.run_parallel(target_str, execute, cached_ids)
+        if single_thread:
+            log.info("Running in single-threaded mode.")
+            return plan.run_parallel(target_str, execute, cached_ids, max_threads=1)
+        else:
+            return plan.run_parallel(target_str, execute, cached_ids)
