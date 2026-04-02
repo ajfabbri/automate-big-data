@@ -1,5 +1,5 @@
 from abd.builder.hadoop import BuildHadoopRelease, DeployHadoopBuildContainer, \
-    GitHadoop, HadoopBuildImageTask, InstallHadoop
+    HadoopSrc, HadoopBuildImageTask, InstallHadoop
 from abd.container.cluster import ClusterTask
 from abd.container.cluster_node import NodeBuildTask, NodeDeployTask
 from abd.container.localstack import LocalstackTask
@@ -21,7 +21,7 @@ tasks: list[Task] = [
     # \__ \ (_) |  _| |_ \ V  V / (_| | | |  __/
     # |___/\___/|_|  \__| \_/\_/ \__,_|_|  \___|
     #
-    GitHadoop(),
+    HadoopSrc(),
     HadoopBuildImageTask(),
     DeployHadoopBuildContainer(),
     BuildHadoopRelease(),

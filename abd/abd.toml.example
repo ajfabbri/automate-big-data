@@ -11,6 +11,7 @@
 # |_.__/ \__,_|_|_|\__,_|
 #
 [build.hadoop]
+# e.g. "git@github:user/foo.git"  # or local repo, e.g. "/home/user/code/foo"
 git_path = "build/hadoop"
 # If not set, will use "trunk".
 # Use "HEAD" to use current checked out version of existing repository.

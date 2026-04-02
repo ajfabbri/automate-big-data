@@ -1,7 +1,6 @@
 from pathlib import Path
 import logging
-from typing import Protocol
-import typing
+from typing import List, Protocol
 
 import abd.command as cmd
 from abd.config.raw import Config, DeployCfg
@@ -25,11 +24,26 @@ class Containers:
         return output.strip().splitlines()
 
     @classmethod
-    def list_images(cls, name_filter: str | None = None) -> typing.List[str]:  # pyright quirk
+    def list_images(cls, name_filter: str | None = None) -> List[str]:  # pyright quirk
         filter_str = f" --filter reference={name_filter}" if name_filter else ""
         c = f"docker images --format '{{{{.Repository}}}}' {filter_str}"
         output = cmd.run_throws(c)
         return output.strip().splitlines()
+
+    @classmethod
+    def list_volumes(cls, name_filter: str | None = None) -> List[str]:
+        filter_str = f" --filter name={name_filter}" if name_filter else ""
+        c = f"docker volume ls --format '{{{{.Name}}}}'{filter_str}"
+        output = cmd.run_throws(c)
+        return output.strip().splitlines()
+
+    @classmethod
+    def ensure_volume(cls, volume_name: str) -> ExitCode:
+        if volume_name in cls.list_volumes():
+            log.info(f"Volume {volume_name} already exists.")
+            return 0
+        c = f"docker volume create {volume_name}"
+        return cmd.run_print(c)
 
     @classmethod
     def attach(cls, container_name: str) -> ExitCode:
@@ -59,7 +73,7 @@ class Containers:
         return 0
 
     @classmethod
-    def list_networks(cls) -> typing.List[str]:
+    def list_networks(cls) -> List[str]:
         c = "docker network ls --format '{{.Name}}'"
         output = cmd.run_throws(c)
         return output.strip().splitlines()

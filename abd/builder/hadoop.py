@@ -1,14 +1,17 @@
+import hashlib
 from pathlib import Path
+from urllib.parse import urlsplit
 import logging
 from time import sleep
 from typing import Set, Tuple, override
 from abd.builder.image import ImageBuilder
-from abd.config.raw import HADOOP_GIT_URI, BuildType
+from abd.config.raw import HADOOP_GIT_URI, BuildType, GitSource, TarBuild
 import abd.command as cmd
 from abd.container.cluster import ClusterTask
 from abd.container.cluster_node import ClusterNodeBuild
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App
+from abd.download import download_binary
 from abd.git import Git
 from abd.job.phases import Task, TaskId, PhaseType
 from abd.project import ExitCode, Project
@@ -33,10 +36,16 @@ class HadoopBuild(ContainerBuild):
         if hcfg:
             self.h_cfg = hcfg
             proj_dir = Project.get_project_root()
-            hpath = Path(self.h_cfg.get_git_source().git_path)
-            if not hpath.is_absolute():
-                hpath = proj_dir / hpath
-            self.local_hadoop = hpath
+            match hcfg.get_source():
+                case GitSource(git_path=git_path, git_ref=git_ref):
+                    self.is_prebuilt = False
+                    hpath = Path(git_path)
+                    if not hpath.is_absolute():
+                        hpath = proj_dir / hpath
+                    self.local_hadoop = hpath
+                case TarBuild(tar_path=tar_path):
+                    self.is_prebuilt = True
+                    self.local_hadoop = None
             if ccfg:
                 self.c_cfg = ccfg
                 cpath = Path(self.c_cfg.get_git_source().git_path)
@@ -156,7 +165,7 @@ class HadoopBuild(ContainerBuild):
     def build_in_container(self, is_cached: bool, is_dryrun: bool) -> ExitCode:
         """ build hadoop common and cloudstore """
 
-        if is_cached:
+        if is_cached or self.is_prebuilt:
             (path, _) = self._find_hadoop_release()
             if path:
                 log.info(f"[cache hit]: existing hadoop build {path}.")
@@ -185,8 +194,61 @@ class HadoopBuild(ContainerBuild):
         """
         return cmd.run_print(build_cmd, is_dryrun=is_dryrun)
 
+    def _validate_checksum(self, binary_path: Path, checksum_path: Path) -> bool:
+        with open(checksum_path, "r") as f:
+            expect = f.read().split("=")[1].strip()
+            sha512 = hashlib.sha512()
+            with open(binary_path, "rb") as bf:
+                for chunk in iter(lambda: bf.read(8192), b""):
+                    sha512.update(chunk)
+        calc = sha512.hexdigest()
+        if calc != expect:
+            log.info(f"Checksum mismatch {binary_path}: expect {expect}, got {calc}")
+            return False
+        log.debug(f"Checksum match {binary_path}: {expect}")
+        return True
+
+    def _resolve_tar_build(self, tar_path: str) -> Tuple[Path | None, str]:
+        split = urlsplit(tar_path)
+        # TODO also download checksum and verify
+        if split.scheme in ["http", "https"]:
+            log.info(f"Using hadoop tar build from URL {tar_path}")
+            checksum_url = tar_path + ".sha512"
+            checksum_save = Project.get_build_dir() / Path(checksum_url).name
+            (err, local_checksum) = download_binary(checksum_url, checksum_save)
+            if err != 0 or not local_checksum:
+                return (None, f"Failed to download checksum from {checksum_url}")
+            save_path = Project.get_build_dir() / Path(tar_path).name
+            # if save path already exists, we can skip download if checksum matches
+            if save_path.exists() and self._validate_checksum(save_path, local_checksum):
+                log.info(f"[skipped] Checksum matches existing file {save_path}, skip download.")
+                return (save_path, "")
+
+            (err, local_path) = download_binary(tar_path, save_path)
+            if err != 0 or not local_path:
+                return (None, f"Failed to download hadoop tar build from {tar_path}")
+            if not self._validate_checksum(local_path, local_checksum):
+                return (None, f"Checksum mismatch for downloaded build {tar_path}")
+            return (local_path, "")
+        elif split.scheme == "":
+            local_path = Path(tar_path)
+            if local_path.exists():
+                return (local_path, "")
+            else:
+                return (None, f"Hadoop tar build not found at {tar_path}")
+        else:
+            return (None, f"Bad URL scheme {split.scheme} for hadoop tar build")
+
     def _find_hadoop_release(self) -> Tuple[Path | None, str]:
         """ Find hadoop path, Returns (path, "") or (None, command_output) on failure. """
+        if self.is_prebuilt:
+            config_path = self.h_cfg.get_tar_build().tar_path
+            (tar_path, err_output) = self._resolve_tar_build(config_path)
+            if not tar_path:
+                log.error(f"Failed to resolve hadoop tar build from {config_path}: {err_output}")
+                return (tar_path, "")
+            return (tar_path, "")
+
         dist_dir = Path(self.docker_home_dir) / "hadoop" / "hadoop-dist" / "target"
         # TODO use Host run method instead of raw-dogging docker container
         list_cmd = f"docker exec hadoop-build bash -lc 'find {dist_dir} -name hadoop-*.tar.gz'"
@@ -200,9 +262,10 @@ class HadoopBuild(ContainerBuild):
         return (paths[0], "")
 
     def find_hadoop_release(self) -> Path | None:
+        # TODO separate finding locally versus on build container?
         (path, output) = self._find_hadoop_release()
         if not path:
-            log.error(f"Failed to find hadoop release.. {output}")
+            log.warning(f"Failed to find hadoop release.. {output}")
         return path
 
     def _find_cloudstore_release(self) -> Tuple[Path | None, str]:
@@ -213,14 +276,12 @@ class HadoopBuild(ContainerBuild):
         # prefers newer versions
         paths.sort(reverse=True)
         if exit_code != 0 or len(paths) == 0:
-            log.error(f"Failed to find cloudstore release.. {output}")
+            log.warning(f"Failed to find cloudstore release.. {output}")
             return (None, output)
         return (paths[0], "")
 
     def find_cloudstore_release(self) -> Path | None:
-        (path, output) = self._find_cloudstore_release()
-        if not path:
-            log.error(f"Failed to find cloudstore release.. {output}")
+        (path, _) = self._find_cloudstore_release()
         return path
 
     def fetch_hadoop_build(self, local_dir: Path, is_cached=False) -> tuple[ExitCode, Path | None]:
@@ -234,6 +295,10 @@ class HadoopBuild(ContainerBuild):
         if not path:
             return (1, None)
         log.debug(f"Using hadoop build: {path}")
+        if self.is_prebuilt:
+            # TODO optimize prebuilt handling: stash local path as soon as
+            # checksum verified
+            return (0, path)
         local_dir.mkdir(parents=True, exist_ok=True)
         c = f"docker cp hadoop-build:{path} {local_dir}/"
         (ret, _) = cmd.run(c)
@@ -256,10 +321,16 @@ class HadoopBuild(ContainerBuild):
         return (0, local_dir / path.name)
 
 
-class GitHadoop(Task):
-    task_id = TaskId("git-hadoop", PhaseType.BUILD)
+class HadoopSrc(Task):
+    task_id = TaskId("hadoop-src", PhaseType.BUILD)
 
     # no dependencies
+
+    def _derive_src_uri(self, build_uri: str) -> str:
+        i = build_uri.rfind(".tar.gz")
+        if i < 0:
+            raise ValueError(f"Expected .tar.gz suffix in build URI {build_uri}")
+        return build_uri[:i] + "-src" + build_uri[i:]
 
     @override
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):
@@ -269,10 +340,15 @@ class GitHadoop(Task):
         h_cfg = arg.get_config().get_build_cfg(BuildType.HADOOP)
         if not h_cfg:
             raise RuntimeError("Hadoop build config not found.")
-        local_hadoop = Path(h_cfg.get_git_source().git_path)
-        # TODO is_dryrun
-        git = Git(HADOOP_GIT_URI, local_hadoop, arg.ui)
-        git.clone(h_cfg.get_git_ref(), is_interactive)
+        match h_cfg.get_source():
+            case GitSource(git_path=git_path, git_ref=git_ref):
+                local_hadoop = Path(git_path)
+                # TODO is_dryrun
+                git = Git(HADOOP_GIT_URI, local_hadoop, arg.ui)
+                git.clone(git_ref, is_interactive)
+            case TarBuild(tar_path=tar_path):
+                log.info("[skipped] no git repo needed for tar build")
+            # TODO support for TarSource & build from source release tarball
 
 
 class HadoopBuildImageTask(Task):
@@ -280,11 +356,14 @@ class HadoopBuildImageTask(Task):
 
     @override
     def dependencies(self) -> Set[TaskId]:
-        return set([GitHadoop.task_id])
+        return set([HadoopSrc.task_id])
 
     @override
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):
         builder = HadoopBuild(arg)
+        if builder.is_prebuilt:
+            log.info("[skipped] Using tar build for hadoop, skipping build image.")
+            return
         err = builder.build_image(is_cached, is_dryrun)
         if err != 0:
             raise RuntimeError("Failed to build hadoop build image.")
@@ -300,6 +379,9 @@ class DeployHadoopBuildContainer(Task):
     @override
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):
         builder = HadoopBuild(arg)
+        if builder.is_prebuilt:
+            log.info("[skipped] build container: Using tar build for hadoop.")
+            return
         err = builder.run_container(is_dryrun)
         if err != 0:
             raise RuntimeError("Failed to run hadoop build container.")
@@ -311,7 +393,7 @@ class BuildHadoopRelease(Task):
     @override
     def dependencies(self) -> Set[TaskId]:
         return {DeployHadoopBuildContainer.task_id,
-                GitHadoop.task_id}
+                HadoopSrc.task_id}
 
     @override
     def run(self, arg: App, is_cached: bool, is_dryrun: bool):
