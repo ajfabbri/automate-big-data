@@ -3,6 +3,7 @@
 import argparse
 import logging
 import sys
+from typing import List
 
 from abd import task_registry
 from abd import project
@@ -138,9 +139,9 @@ def add_task_opt(parser: argparse.ArgumentParser):
                         help="Run specific task(s) by id.")
 
 
-def parse_args(parser: argparse.ArgumentParser) -> Args:
+def parse_args(parser: argparse.ArgumentParser, argv: List[str] | None) -> Args:
     # Parse args and configure logging
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     log_level = logging.WARNING
     if args.verbose == 1:
         log_level = logging.INFO
@@ -167,7 +168,7 @@ def parse_args(parser: argparse.ArgumentParser) -> Args:
                 task_str=task, raw=args, is_serial=is_serial)
 
 
-def main() -> ExitCode:
+def main(argv: List[str] | None = None) -> ExitCode:
     # Define CLI args
     parser = argparse.ArgumentParser(prog="abd",
                                      description="abd: automate big data CLI tool.")
@@ -202,7 +203,8 @@ def main() -> ExitCode:
     add_task_opt(exec_p)
     add_cached_opt(exec_p)
     exec_p.add_argument("--shell", "-s", help="Run this shell command instead of registered task.")
-    exec_p.add_argument("--one-thread", "-o", action="store_true", help="Only use one thread for tasks")
+    exec_p.add_argument("--one-thread", "-o", action="store_true",
+                        help="Only use one thread for tasks")
 
     # tasks
     tasks_p = subparsers.add_parser("tasks", help="Show registered tasks.")
@@ -211,7 +213,7 @@ def main() -> ExitCode:
 
     # init main app context
     _ = task_registry.init()
-    args = parse_args(parser)
+    args = parse_args(parser, argv)
     app = App(args)
     if args.raw.command == "config":
         # TODO just register a shell task and use runner?
@@ -233,4 +235,7 @@ def main() -> ExitCode:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    err = main(sys.argv)
+    if err != 0:
+        log.error(f"⛔️ abd exiting with code {err}.")
+    sys.exit(err)

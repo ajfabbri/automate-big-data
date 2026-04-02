@@ -27,7 +27,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3 \
     python3-pip \
+    openssh-server openssh-client \
     && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /etc/ssh/ssh_config.d
+RUN printf "Host *\n    StrictHostKeyChecking no\n    UserKnownHostsFile /dev/null\n" \
+    > /etc/ssh/ssh_config.d/00-insecure-cluster.conf
+RUN mkdir -p /var/run/sshd
+RUN ssh-keygen -A
+EXPOSE 22
 
 # Set up locale
 RUN locale-gen en_US.UTF-8
@@ -54,5 +62,5 @@ WORKDIR /home/$USERNAME
 RUN mkdir -p shared
 RUN chown -R $USERNAME:$GROUPNAME shared
 
-# Default shell
-CMD ["/bin/bash"]
+#CMD ["/usr/sbin/sshd", "-D"]
+CMD ["/usr/bin/bash"]
