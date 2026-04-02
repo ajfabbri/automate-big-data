@@ -9,7 +9,7 @@ from abd.config.raw import BuildType
 from abd.container.container import ContainerBuild, Containers
 from abd.container.net import NetworkTask
 from abd.context import App
-from abd.host import Container
+from abd.host import Container, Host
 from abd.job.phases import Task, TaskId, PhaseType
 from abd.project import ExitCode, Project
 
@@ -284,3 +284,76 @@ class NodeDeployTask(Task):
             ret = nbuild.run_container(is_dryrun, i)
             if ret != 0:
                 raise RuntimeError("Failed to run cluster node container.")
+
+
+class SharedSsh(Task):
+    task_id = TaskId("shared-ssh", PhaseType.DEPLOY)
+
+    @override
+    def dependencies(self) -> Set[TaskId]:
+        return {NodeDeployTask.task_id}
+
+    def _is_ssh_key_setup(self, host: Host) -> bool:
+        c = "ls .ssh/id_rsa.pub"
+        (err, _) = host.run_command(c)
+        return err == 0
+
+    @override
+    def run(self, arg: App, is_cached: bool, is_dryrun: bool):
+        node_deploy = arg.get_config().get_deploy_cfg("cluster-node")
+        is_first = True
+        for host in ClusterNodeBuild.get_deploy_hosts(node_deploy):
+            if is_cached and self._is_ssh_key_setup(host):
+                log.info(f"[skipped] SSH key already set up in {host.get_name()}.")
+                is_first = False
+            elif is_first:
+                (err, out) = host.run_command("ssh-keygen -t rsa -f ~/.ssh/id_rsa -q -N ''",
+                                              is_dryrun=is_dryrun)
+                if err != 0:
+                    e = f"Failed to generate ssh key in {host.get_name()}: {out}"
+                    log.error(e)
+                    raise RuntimeError(e)
+
+                (err, out) = host.run_command("cp ~/.ssh/id_rsa* ~/shared/",
+                                              is_dryrun=is_dryrun)
+                if err != 0:
+                    e = f"Failed to copy ssh keys to shared/ in {host.get_name()}: {out}"
+                    log.error(e)
+                    raise RuntimeError(e)
+                (err, out) = host.run_command("cat ~/.ssh/id_rsa.pub >> "
+                                              + "~/shared/authorized_keys")
+                if err != 0:
+                    e = f"Failed to set up authorized_keys in {host.get_name()}: {out}"
+                    log.error(e)
+                    raise RuntimeError(e)
+
+                (err, out) = host.run_command("cp ~/shared/authorized_keys ~/.ssh/")
+                if err != 0:
+                    e = f"Failed to copy authorized_keys in {host.get_name()}: {out}"
+                    log.error(e)
+                    raise RuntimeError(e)
+                is_first = False
+            else:
+                (err, out) = host.run_command("mkdir -p ~/.ssh/")
+                if err != 0:
+                    e = f"Failed to create .ssh directory in {host.get_name()}: {out}"
+                    log.error(e)
+                    raise RuntimeError(e)
+
+                (err, out) = host.run_command("cp ~/shared/id_rsa* ~/.ssh/",
+                                              is_dryrun=is_dryrun)
+                if err != 0:
+                    e = f"Failed to copy ssh keys from shared/ in {host.get_name()}: {out}"
+                    log.error(e)
+                    raise RuntimeError(e)
+
+                (err, out) = host.run_command("cp ~/shared/authorized_keys ~/.ssh/")
+                if err != 0:
+                    e = f"Failed to copy authorized_keys from shared/ in {host.get_name()}: {out}"
+                    log.error(e)
+                    raise RuntimeError(e)
+            (err, _) = host.run_command("sudo service ssh start")
+            if err != 0:
+                e = f"Failed to start ssh service in {host.get_name()}"
+                log.error(e)
+                raise RuntimeError(e)

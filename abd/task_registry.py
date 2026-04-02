@@ -1,7 +1,7 @@
 from abd.builder.hadoop import BuildHadoopRelease, DeployHadoopBuildContainer, \
     HadoopSrc, HadoopBuildImageTask, InstallHadoop
 from abd.container.cluster import ClusterTask
-from abd.container.cluster_node import NodeBuildTask, NodeDeployTask
+from abd.container.cluster_node import NodeBuildTask, NodeDeployTask, SharedSsh
 from abd.container.localstack import LocalstackTask
 from abd.container.net import NetworkTask
 from abd.executions.hadoop import HadoopSanityTask, S3ARoundTrip
@@ -38,6 +38,7 @@ tasks: list[Task] = [
     NodeBuildTask(),
     NodeDeployTask(),
     ClusterTask(),
+    SharedSsh(),
 
     #                           _   _
     #   _____  _____  ___ _   _| |_(_) ___  _ __  ___
