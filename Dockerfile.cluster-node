@@ -51,6 +51,8 @@ ENV HADOOP_HOME=/opt/hadoop
 ENV PATH=$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$PATH
 
 WORKDIR /home/$USERNAME
+RUN mkdir -p shared
+RUN chown -R $USERNAME:$GROUPNAME shared
 
 # Default shell
 CMD ["/bin/bash"]

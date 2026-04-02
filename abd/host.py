@@ -48,7 +48,9 @@ class Container(Host):
     def _make_cmd(self, cmd: str, quiet_failure: bool) -> str:
         # use -l for login shell to pick up PATH etc.
         opt = "" if quiet_failure else "-e -o pipefail "
-        docker_cmd = f"docker exec {self.name} bash {opt}-lc '{cmd}'"
+        # backslash-escape any single quotes
+        cmd = cmd.replace("'", r"\'")
+        docker_cmd = f"docker exec {self.name} bash {opt}-lc $'{cmd}'"
         return docker_cmd
 
     @override

@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from typing import Set, override
+import re
 
 from abd.builder.image import ImageBuilder
 import abd.command as cmd
@@ -17,6 +18,7 @@ log = logging.getLogger(__name__)
 
 class ClusterNodeBuild(ContainerBuild):
     CONTAINER_USERNAME = "hadoop"
+    SHARED_VOL = "cluster-node-shared"
 
     @override
     def __init__(self, app: App):
@@ -53,8 +55,14 @@ class ClusterNodeBuild(ContainerBuild):
     @override
     def run_container(self, is_dryrun: bool, index: int = 0) -> ExitCode:
         container_name = self.get_container_name(index)
+        err = Containers.ensure_volume(self.SHARED_VOL) if not is_dryrun else 0
+        if err != 0:
+            log.error(f"Failed to create shared volume {self.SHARED_VOL}.")
+            return err
+
         run_cmd = f"""
         docker run --rm=true
+            -v {self.SHARED_VOL}:{self.docker_home_dir}/shared
             --network {self.app.container_network}
             --name "{container_name}"
             --hostname "{container_name}"
@@ -65,7 +73,7 @@ class ClusterNodeBuild(ContainerBuild):
         if container_name in Containers.list():
             log.info(f"Container {container_name} already running.")
         else:
-            ret = cmd.run_print(run_cmd, cwd=Project.get_project_root())
+            ret = cmd.run_print(run_cmd, cwd=Project.get_project_root(), is_dryrun=is_dryrun)
         if ret == 0:
             # TODO return running host instead of mutating app context directly?
             self.app.hosts.add(Container(container_name))
@@ -122,34 +130,112 @@ class ClusterNodeBuild(ContainerBuild):
     # TODO move to hadoop module
     def check_hadoop_install(self) -> bool:
         any_missing = False
-        for i in range(self.deploy_cfg.num_nodes):  # type: ignore
-            host = self.get_container_name(i)
+        for host in self.get_deploy_hosts(self.deploy_cfg):
             c = f"""
             docker exec {host} bash -c
             'if [ ! -f /opt/hadoop/bin/hadoop ]; then exit 1; fi'
             """
-            (ret, _) = cmd.run(c, quiet=True)
-            if ret != 0:
+            (err, _) = host.run_command(c, quiet_failure=True)
+            if err != 0:
                 any_missing = True
                 log.debug(f"check_hadoop_install({host}) -> False")
         return not any_missing
 
-    def install_hadoop(self, local_path: Path, is_dryrun: bool):
-        ret = self.copy_to_containers(local_path)
+    def _validate_aws_vers(self, version: str) -> ExitCode:
+        pat = r"^\d+\.\d+\.\d+$"
+        if not re.match(pat, version):
+            log.error(f"Invalid AWS SDK version {version} (expected format X.Y.Z)")
+            return 1
+        return 0
+
+    def install_hadoop_aws(self, is_dryrun=False) -> ExitCode:
+        """ Hadoop releases no longer include AWS SDK depencency; it is too huge.
+        This function derives the required version and installs it. """
+
+        some_host = self.get_deploy_hosts(self.deploy_cfg).pop()
+        # 1. figure out which versions of jars we need
+        ver_cmd = "hadoop version | head -1 | awk '{print $2}'"
+        (err, output) = some_host.run_command(ver_cmd)
+        if err != 0:
+            log.error(f"Failed to get hadoop version on {some_host.get_name()}: {output}")
+            return err
+        vers = output.strip()
+
+        sdk_ver_cmd = "grep awssdk.bundle /opt/hadoop/LICENSE-binary | cut -d ':' -f 3"
+        (err, sdk_vers) = some_host.run_command(sdk_ver_cmd)
+        if err != 0:
+            log.error(f"Failed to get AWS SDK version {some_host.get_name()}: {sdk_vers}")
+            return err
+        err = self._validate_aws_vers(sdk_vers)
+        if err != 0:
+            return err
+        log.info(f"ℹ️ Found hadoop {vers}, aws-java-sdk-bundle {sdk_vers}")
+
+        is_first = True
+        for host in self.get_deploy_hosts(self.deploy_cfg):
+            if is_first:
+                mvn_cmd = f"mvn dependency:get -Dartifact=software.amazon.awssdk:bundle:{sdk_vers}"
+                (err, _) = host.run_command(mvn_cmd, is_dryrun=is_dryrun)
+                if err != 0:
+                    log.error(f"Failed to download AWS SDK bundle in {host.get_name()}: {sdk_vers}")
+                    return err
+                cmd = f"find {self.docker_home_dir}/.m2/repository/software/amazon/awssdk/bundle"
+                cmd += f"/{sdk_vers} -name bundle-{sdk_vers}.jar"
+                (err, out) = host.run_command(cmd, is_dryrun=is_dryrun)
+                if err != 0:
+                    log.error(f"Failed to find AWS SDK bundle jar in {host.get_name()}: {sdk_vers}")
+                    return err
+                jar_path = out.split("\n")[0]
+                cmd = f"cp {jar_path} {self.docker_home_dir}/shared/"
+                (err, out) = host.run_command(cmd, is_dryrun=is_dryrun)
+                if err != 0:
+                    log.error(f"Fail copying AWS SDK jar to shared/ {host.get_name()}: {out}")
+                    return err
+                is_first = False
+            else:
+                cmd = f"cp {self.docker_home_dir}/shared/bundle-{sdk_vers}.jar"
+                # TODO is this the right path?
+                cmd += " /opt/hadoop/share/hadoop/tools/lib"
+                (err, out) = host.run_command(cmd, is_dryrun=is_dryrun)
+                if err != 0:
+                    log.error(f"Fail copying AWS SDK jar from shared/ {host.get_name()}: {out}")
+                    return err
+        return 0
+
+    def install_hadoop(self, local_tar: Path, is_dryrun: bool) -> ExitCode:
+        ret = self.copy_to_containers(local_tar, is_dryrun=is_dryrun)
 
         for i in range(self.deploy_cfg.num_nodes):  # type: ignore
             host = self.get_container_name(i)
+            # move any existing /opt/hadoop
+            c = f"""
+            docker exec {host} bash -c
+            'if [ -d /opt/hadoop ]; then
+              if [ -d /opt/hadoop-prev ]; then
+                sudo rm -rf /opt/hadoop-prev;
+              fi;
+              sudo mv /opt/hadoop /opt/hadoop-prev;
+              sudo mkdir -p /opt/hadoop;
+              sudo chown {self.CONTAINER_USERNAME}:{self.CONTAINER_USERNAME} /opt/hadoop; fi'
+            """
+            (ret, output) = cmd.run(c, is_dryrun=is_dryrun)
+            if ret != 0:
+                log.error(f"Failed to move existing hadoop {host}: {output}")
+                return ret
             c = f"""
             docker exec {host} bash -c
             'cd {self.docker_home_dir} &&
-             tar -xzf {local_path.name} --strip-components=1 -C /opt/hadoop'
+             tar -xzf {local_tar.name} --strip-components=1 -C /opt/hadoop'
             """
             (ret, output) = cmd.run(c, is_dryrun=is_dryrun)
             if ret != 0:
                 log.error(f"Failed to extract hadoop in {host}: {output}")
                 return ret
-            log.info(f"✅ Extracted {local_path.name} to {host}")
-        return 0
+            log.info(f"✅ Extracted {local_tar.name} to {host}")
+
+        # Note: this could be a separate task
+        # TODO add optional `staging_repo` to build.hadoop config
+        return self.install_hadoop_aws(is_dryrun)
 
     def check_cloudstore_jar(self) -> bool:
         any_missing = False
