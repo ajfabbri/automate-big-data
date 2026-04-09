@@ -14,7 +14,6 @@ log = logging.getLogger(__name__)
 # Raw type definitions for config (de)serialization to TOML
 #
 DEFAULT_NUM_NODES = 3
-DEFAULT_MAVEN_REPO = "https://repo1.maven.org/maven2/"
 
 # TODO move to util types module?
 type Primitive = str | int | bool | list | dict
@@ -42,7 +41,6 @@ class GitSource:
 @dataclass
 class TarBuild:
     tar_path: str
-    maven_repo: str
 
 
 type BuildSource = GitSource | TarBuild
@@ -59,9 +57,9 @@ def _default_git_ref(build_name: str) -> str:
 
 
 def _get_build_source(build_name: str, git_path: str | None, git_ref: str | None,
-                      tar_path: str | None, maven_repo: str | None) -> BuildSource:
+                      tar_path: str | None) -> BuildSource:
     if tar_path:
-        return TarBuild(tar_path, maven_repo or DEFAULT_MAVEN_REPO)
+        return TarBuild(tar_path)
     else:
         if not git_path:
             raise RuntimeError("Build config must contain git_path, or tar_path")
@@ -121,8 +119,8 @@ class HadoopCfg(BuildCfg):
 
     @classmethod
     def load(cls, git_path: str | None = None, git_ref: str | None = None,
-             tar_path: str | None = None, maven_repo: str | None = None) -> 'HadoopCfg':
-        return HadoopCfg(_get_build_source("hadoop", git_path, git_ref, tar_path, maven_repo))
+             tar_path: str | None = None) -> 'HadoopCfg':
+        return HadoopCfg(_get_build_source("hadoop", git_path, git_ref, tar_path))
 
     @classmethod
     def get_default(cls) -> 'HadoopCfg':
@@ -139,7 +137,7 @@ class CloudstoreCfg(BuildCfg):
     @classmethod
     def load(cls, git_path: str | None = None, git_ref: str | None = None,
              tar_path: str | None = None) -> 'CloudstoreCfg':
-        return CloudstoreCfg(_get_build_source("cloudstore", git_path, git_ref, tar_path, None))
+        return CloudstoreCfg(_get_build_source("cloudstore", git_path, git_ref, tar_path))
 
     @classmethod
     def get_default(cls) -> 'CloudstoreCfg':
@@ -155,11 +153,11 @@ class SparkCfg(BuildCfg):
             raise NotImplementedError("Git source not yet supported for Spark builds")
         if not tar_path:
             raise ValueError("tar_path is required for Spark builds")
-        return SparkCfg(TarBuild(tar_path=tar_path, maven_repo=""))
+        return SparkCfg(TarBuild(tar_path=tar_path))
 
     @classmethod
     def get_default(cls) -> 'SparkCfg':
-        default_src = TarBuild(tar_path=DEFAULT_SPARK_TAR, maven_repo="")
+        default_src = TarBuild(tar_path=DEFAULT_SPARK_TAR)
         return SparkCfg(default_src)
 
 
@@ -298,9 +296,7 @@ class Loader:
             # Conditionals are silly, but help type checking
             default_tar = default.tar_path if not default_git else Path("build") / "example.tar"
             path_str = ui.prompt_str(f"{name}: tar path?", default_tar)
-            default_maven = default.maven_repo if not default_git else DEFAULT_MAVEN_REPO
-            maven_repo = ui.prompt_str(f"{name}: maven repo?", default_maven)
-            return TarBuild(path_str, maven_repo)
+            return TarBuild(path_str)
 
     def create_interactive(self, ui: Ui) -> Config:
         """Edit or create a new configuration, interactively."""
