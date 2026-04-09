@@ -1,7 +1,11 @@
 # [build]
-# [build.example]
+#
+# [build.git-example]
 # git_path = "git@github:ajfabbri/automate-big-data.git"  # or local repo, e.g. "/home/code/foo"
 # git_ref = "main"
+#
+# [build.tar-example]
+# tar_path = "https://dist.apache.org/repos/dist/dev/hadoop/hadoop-3.5.0-RC2/hadoop-3.5.0.tar.gz"
 
 
 #  _           _ _     _

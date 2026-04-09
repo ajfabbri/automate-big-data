@@ -1,4 +1,8 @@
 # TODOs
+[ ] Standalone spark test w/ Hadoop FS clients
+    [x] automated nopass SSH within cluster
+    [ ] install spark standalone
+
 [ ] hadoop RC build qualification
     [x] add to config
 [ ] project organization
