@@ -1,11 +1,13 @@
 
 from dataclasses import dataclass
 from enum import auto, StrEnum
+from logging import Logger
 from pathlib import Path
 from typing import ClassVar, Protocol, Set
 
 from abd.context import App
-from abd.project import Project
+from abd.host import Host
+from abd.project import CmdResult, Project
 
 
 class PhaseType(StrEnum):
@@ -47,3 +49,22 @@ class Task[T: App](Protocol):
 
     def __str__(self):
         return f"{self.task_id.phase_type}:{self.task_id.name}"
+
+    # helper functions
+    def _check_err(self, log: Logger, err: int, msg: str):
+        if err != 0:
+            log.error(msg)
+            raise RuntimeError(msg)
+
+    def _check_result(self, log: Logger, res: CmdResult, msg: str):
+        (err, output) = res
+        if err != 0:
+            e = f"{msg}: {output}"
+            log.error(e)
+            raise RuntimeError(e)
+
+    def _md5_sum(self, log: Logger, host: Host, path: Path, is_dryrun=False) -> str:
+        cmd = f"md5sum {path}"
+        (err, out) = host.run_command(cmd, is_dryrun)
+        self._check_err(log, err, f"Failed to compute md5 of {path} on {host.get_name()}: {cmd}")
+        return out.strip().split()[0]

@@ -5,7 +5,7 @@ from abd.container.cluster import ClusterTask
 from abd.container.cluster_node import NodeBuildTask, NodeDeployTask, SharedSsh
 from abd.container.localstack import LocalstackTask
 from abd.container.net import NetworkTask
-from abd.executions.hadoop import HadoopSanityTask, S3ARoundTrip
+from abd.executions.hadoop import HadoopSanityTask, S3ALargeFile, S3ARoundTrip
 from abd.executions.hadoop_int import HadoopS3aIntegration
 from abd.job.job import Job
 from abd.job.phases import Task
@@ -51,6 +51,7 @@ tasks: list[Task] = [
     #
     HadoopSanityTask(),
     S3ARoundTrip(),
+    S3ALargeFile(),
     HadoopS3aIntegration()
 ]
 

@@ -44,7 +44,7 @@ class Host(Protocol):
         return out
 
     def put_file(self, local_path: Path, chown: str | None, host_path: Path | None = None,
-                 is_dryrun=False) -> ExitCode:
+                 chmod: str | None = None, is_dryrun=False) -> ExitCode:
         ...
 
 
@@ -88,18 +88,25 @@ class Container(Host):
 
     @override
     def put_file(self, local_path: Path, chown: str | None, host_path: Path | None = None,
-                 is_dryrun=False) -> ExitCode:
+                 chmod: str | None = None, is_dryrun=False) -> ExitCode:
         if not host_path:
-            host_path = local_path
+            host_path = Path(local_path.name)
         docker_cmd = f"docker cp {local_path} {self.name}:{host_path}"
         (err, out) = cmd.run(docker_cmd, is_dryrun=is_dryrun)
         if err != 0:
             e = f"Failed to copy file to container {self.name}"
             log.error(f"{e}: {out}")
-        elif chown:
+            return err
+        if chown:
             (err, out) = self.run_command(f"sudo chown {chown} {host_path}",
                                           is_dryrun=is_dryrun)
             if err != 0:
                 e = f"Failed to chown file in container {self.name}"
+                log.error(f"{e}: {out}")
+        if chmod:
+            (err, out) = self.run_command(f"sudo chmod {chmod} {host_path}",
+                                          is_dryrun=is_dryrun)
+            if err != 0:
+                e = f"Failed to chmod file in container {self.name}"
                 log.error(f"{e}: {out}")
         return err
