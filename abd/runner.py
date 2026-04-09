@@ -142,7 +142,7 @@ class ExecutionPlan:
                     future.result()
                     log.debug(f"         done: worker {idx}")
                 except Exception as e:
-                    log.error(f"[thread {idx}] raised an exception: {e}")
+                    log.exception(f"[thread {idx}] raised an exception: {e}")
                     has_error = True
         return 1 if has_error else 0
 
