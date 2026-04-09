@@ -24,6 +24,10 @@ git_ref = "HEAD"
 [build.cloudstore]
 git_path = "build/cloudstore"
 
+[build.spark]
+tar_path="https://www.apache.org/dyn/closer.lua/spark/spark-4.1.1/spark-4.1.1-bin-without-hadoop.tgz"
+
+
 #      _            _
 #   __| | ___ _ __ | | ___  _   _
 #  / _` |/ _ \ '_ \| |/ _ \| | | |

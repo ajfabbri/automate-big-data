@@ -24,6 +24,7 @@ type PrimitiveDict = Dict[str, str | int | bool | list | dict]
 class BuildType(StrEnum):
     HADOOP = "hadoop"
     CLOUDSTORE = "cloudstore"
+    SPARK = "spark"
 
 
 @dataclass
@@ -108,6 +109,8 @@ DEFAULT_HADOOP_REF = "trunk"
 CLOUDSTORE_GIT_URI = "git@github.com:steveloughran/cloudstore.git"
 CLOUSTORE_GIT_REF = "main"
 HADOOP_GIT_URI = "git@github.com:apache/hadoop.git"
+DEFAULT_SPARK_TAR = "https://www.apache.org/dyn/closer.lua/spark/spark-4.1.1/" \
+    + "spark-4.1.1-bin-without-hadoop.tgz"
 
 
 class HadoopCfg(BuildCfg):
@@ -144,6 +147,22 @@ class CloudstoreCfg(BuildCfg):
         return CloudstoreCfg(default_src)
 
 
+class SparkCfg(BuildCfg):
+    @classmethod
+    def load(cls, git_path: str | None = None, git_ref: str | None = None,
+             tar_path: str | None = None) -> 'SparkCfg':
+        if git_path or git_ref:
+            raise NotImplementedError("Git source not yet supported for Spark builds")
+        if not tar_path:
+            raise ValueError("tar_path is required for Spark builds")
+        return SparkCfg(TarBuild(tar_path=tar_path, maven_repo=""))
+
+    @classmethod
+    def get_default(cls) -> 'SparkCfg':
+        default_src = TarBuild(tar_path=DEFAULT_SPARK_TAR, maven_repo="")
+        return SparkCfg(default_src)
+
+
 @dataclass
 class Config:
     build: dict[str, BuildCfg]
@@ -151,7 +170,7 @@ class Config:
 
     def get_build_cfg(self, build_type: BuildType) -> BuildCfg | None:
         match build_type:
-            case BuildType.HADOOP | BuildType.CLOUDSTORE:
+            case BuildType.HADOOP | BuildType.CLOUDSTORE | BuildType.SPARK:
                 return self.build.get(build_type)
             case _:
                 raise ValueError(f"Unsupported build type: {build_type}")
@@ -194,6 +213,8 @@ class Loader:
                         builds[key] = HadoopCfg.load(**cfg)
                     case BuildType.CLOUDSTORE:
                         builds[key] = CloudstoreCfg.load(**cfg)
+                    case BuildType.SPARK:
+                        builds[key] = SparkCfg.load(**cfg)
                     case _:
                         log.error(f"Unknown build type in config: {key}")
             except Exception as e:
@@ -284,6 +305,15 @@ class Loader:
     def create_interactive(self, ui: Ui) -> Config:
         """Edit or create a new configuration, interactively."""
 
+        builds: dict[str, BuildCfg] = {}
+        deploys: dict[str, DeployCfg] = {}
+
+        def add_install(install: Install, num_nodes=DEFAULT_NUM_NODES):
+            if "cluster-node" in deploys:
+                deploys["cluster-node"].installs.append(install)
+            else:
+                deploys["cluster-node"] = DeployCfg(num_nodes, "cluster-node", [install])
+
         # check for existing config
         existing_config = self.load()
         if existing_config:
@@ -294,23 +324,39 @@ class Loader:
         else:
             existing_config = self.load_template_or_throw()
 
+        # Hadoop Ecosystem
         existing_hadoop_cfg = existing_config.get_build_cfg(BuildType.HADOOP)
-        existing_cloudstore_cfg = existing_config.get_build_cfg(BuildType.CLOUDSTORE)
         enable_hadoop = ui.prompt_bool("Enable Hadoop?", existing_hadoop_cfg is not None)
-        builds: dict[str, BuildCfg] = {}
-        deploys: dict[str, DeployCfg] = {}
         if enable_hadoop:
+            # Hadoop Common
             h_defaults = existing_hadoop_cfg or HadoopCfg.get_default()
-            c_defaults = existing_cloudstore_cfg or CloudstoreCfg.get_default()
             num_nodes = ui.prompt_int("Number of Hadoop nodes", DEFAULT_NUM_NODES)
             hadoop_src = self._prompt_source("Hadoop", ui, h_defaults.source)
-            cloudstore_src = self._prompt_source("Cloudstore", ui, c_defaults.source)
             builds[BuildType.HADOOP] = HadoopCfg(hadoop_src)
-            builds[BuildType.CLOUDSTORE] = CloudstoreCfg(cloudstore_src)
+            add_install(Install(BuildType.HADOOP, "/home/hadoop"), num_nodes)
 
-            deploys["cluster-node"] = DeployCfg(num_nodes, "cluster-node",
-                                                [Install(BuildType.HADOOP, "/home/hadoop"),
-                                                 Install(BuildType.CLOUDSTORE, "/home/hadoop")])
+            # Cloudstore
+            existing_cs = existing_config.get_build_cfg(BuildType.CLOUDSTORE)
+            c_defaults = existing_cs or CloudstoreCfg.get_default()
+            enable_cloudstore = ui.prompt_bool("Enable Cloudstore?", existing_cs is not None)
+            if enable_cloudstore:
+                cloudstore_src = self._prompt_source("Cloudstore", ui, c_defaults.source)
+                builds[BuildType.CLOUDSTORE] = CloudstoreCfg(cloudstore_src)
+                add_install(Install(BuildType.CLOUDSTORE, "/home/hadoop"))
+
+            # Spark
+            existing_spark = existing_config.get_build_cfg(BuildType.SPARK)
+            enable_spark = ui.prompt_bool("Enable Spark?", existing_spark is not None)
+            if enable_spark:
+                s_defaults = existing_spark or SparkCfg.get_default()
+                spark_src = self._prompt_source("Spark", ui, s_defaults.source)
+                builds[BuildType.SPARK] = SparkCfg(spark_src)
+                # TODO these actually install in /opt/hadoop and /opt/spark,
+                # this home path is only used for downloads.
+                add_install(Install(BuildType.SPARK, "/home/hadoop"))
+        else:
+            log.info("Hadoop disabled. Skipping dependencies Spark, Cloudstore, etc.")
+
         cfg = Config(build=builds, deploy=deploys)
 
         want_save = ui.prompt_bool("Save this configuration?", True)
