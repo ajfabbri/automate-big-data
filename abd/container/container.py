@@ -17,9 +17,10 @@ class Containers:
         self.cfg = cfg
 
     @classmethod
-    def list(cls, name_filter: str | None = None) -> list[str]:
+    def list(cls, name_filter: str | None = None, want_json=False) -> list[str]:
         filter_str = f' --filter "name={name_filter}"' if name_filter else ""
-        c = f"docker ps --format '{{{{.Names}}}}'{filter_str}"
+        format_str = "{{json .}}" if want_json else "{{.Names}}"
+        c = f"docker ps --format '{format_str}'{filter_str}"
         output = cmd.run_throws(c)
         return output.strip().splitlines()
 

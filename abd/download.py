@@ -100,13 +100,26 @@ class Downloader:
     def local_path(self) -> Path:
         return self.save_dir / self.name
 
-    def _validate_checksum(self, binary_path: Path, checksum_path: Path) -> bool:
+    def _parse_checksum_file(self, checksum_path: Path) -> str:
+        # Try to deal with two checksum file formats:
+        # 1) "SHA512 (filename) = hash" (e.g. Apache Hadoop)
+        # 2) "hash  filename" (e.g. Apache Spark)
         with open(checksum_path, "r") as f:
-            expect = f.read().split("=")[1].strip()
-            sha512 = hashlib.sha512()
-            with open(binary_path, "rb") as bf:
-                for chunk in iter(lambda: bf.read(8192), b""):
-                    sha512.update(chunk)
+            lines = f.readlines()
+            if len(lines) != 1:
+                raise Exception(f"Unexpected checksum file format: {checksum_path}")
+            line = lines[0].strip()
+            if line.startswith("SHA512"):
+                return line.split("=")[1].strip()
+            else:
+                return line.split()[0].strip()
+
+    def _validate_checksum(self, binary_path: Path, checksum_path: Path) -> bool:
+        expect = self._parse_checksum_file(checksum_path)
+        sha512 = hashlib.sha512()
+        with open(binary_path, "rb") as bf:
+            for chunk in iter(lambda: bf.read(8192), b""):
+                sha512.update(chunk)
         calc = sha512.hexdigest()
         if calc != expect:
             log.info(f"Checksum mismatch {binary_path}: expect {expect}, got {calc}")

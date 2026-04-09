@@ -19,6 +19,8 @@ log = logging.getLogger(__name__)
 class ClusterNodeBuild(ContainerBuild):
     CONTAINER_USERNAME = "hadoop"
     SHARED_VOL = "cluster-node-shared"
+    PORT_SPARK_UI = 4040  # Ensure Dockerfile.cluster-node matches
+    PORT_SPARK_MASTER = 8088
 
     @override
     def __init__(self, app: App):
@@ -59,13 +61,18 @@ class ClusterNodeBuild(ContainerBuild):
         if err != 0:
             log.error(f"Failed to create shared volume {self.SHARED_VOL}.")
             return err
+        ports = ""
+        if index == 0:
+            # master node
+            ports += f" -p 127.0.0.1:{self.PORT_SPARK_UI}:8080"
+            ports += f" -p 127.0.0.1:{self.PORT_SPARK_MASTER}:7077"
 
         run_cmd = f"""
         docker run --rm=true
             -v {self.SHARED_VOL}:{self.docker_home_dir}/shared
             --network {self.app.container_network}
             --name "{container_name}"
-            --hostname "{container_name}"
+            --hostname "{container_name}" {ports}
             -dit
             {self.get_image_name()}
         """
@@ -91,7 +98,7 @@ class ClusterNodeBuild(ContainerBuild):
         dest_path = self._resolve_container_path(container_path)
         for host in self.get_deploy_hosts(self.deploy_cfg):
             err = host.put_file(local_path, chown=self.CONTAINER_USERNAME,
-                                host_path=dest_path, is_dryrun=is_dryrun)
+                                host_dir=dest_path, is_dryrun=is_dryrun)
             if err != 0:
                 log.error(f"Failed to copy {local_path} to {host.get_name()}:{dest_path}")
                 break
@@ -147,8 +154,7 @@ class ClusterNodeBuild(ContainerBuild):
         script = Project.get_project_root() / "abd/scripts/ensure-line-in-file.sh"
         for host in self.get_deploy_hosts(self.deploy_cfg):
             err = host.put_file(script, chown=self.CONTAINER_USERNAME, chmod="750",
-                                host_path=Path(self.docker_home_dir) / script.name,
-                                is_dryrun=is_dryrun)
+                                host_dir=Path(self.docker_home_dir), is_dryrun=is_dryrun)
             if err != 0:
                 return err
             henv_path = "/opt/hadoop/etc/hadoop/hadoop-env.sh"
