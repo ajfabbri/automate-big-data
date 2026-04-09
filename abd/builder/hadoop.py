@@ -407,6 +407,10 @@ class InstallHadoop(Task):
     def _install_cloudstore(self, app: App, is_cached: bool, is_dryrun: bool):
         n_build = ClusterNodeBuild(app)
         h_build = HadoopBuild(app)
+        deploy = app.get_config().get_deploy_cfg("cluster-node")
+        if not deploy or BuildType.CLOUDSTORE not in deploy.installs:
+            log.info("[skipped] cloudstore install: not configured.")
+            return
         if is_cached:
             path = n_build.find_in_containers("cloudstore-*.jar")
             if path:
