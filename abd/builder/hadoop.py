@@ -37,13 +37,13 @@ class HadoopBuild(ContainerBuild):
             self.h_cfg = hcfg
             proj_dir = Project.get_project_root()
             match hcfg.get_source():
-                case GitSource(git_path=git_path, git_ref=git_ref):
+                case GitSource(git_path=git_path, git_ref=_):
                     self.is_prebuilt = False
                     hpath = Path(git_path)
                     if not hpath.is_absolute():
                         hpath = proj_dir / hpath
                     self.local_hadoop = hpath
-                case TarBuild(tar_path=tar_path):
+                case TarBuild(tar_path=_):
                     self.is_prebuilt = True
                     self.local_hadoop = None
             if ccfg:
