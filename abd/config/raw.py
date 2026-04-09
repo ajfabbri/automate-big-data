@@ -101,6 +101,12 @@ class DeployCfg:
     image_name: str
     installs: list[Install]
 
+    def get_install(self, build_type: BuildType) -> Install | None:
+        for install in self.installs:
+            if install.build_name == build_type:
+                return install
+        return None
+
 
 DEFAULT_HADOOP_PATH = "build/hadoop"
 DEFAULT_HADOOP_REF = "trunk"

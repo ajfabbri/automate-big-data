@@ -43,7 +43,7 @@ class Host(Protocol):
             raise RuntimeError(e)
         return out
 
-    def put_file(self, local_path: Path, chown: str | None, host_path: Path | None = None,
+    def put_file(self, local_path: Path, chown: str | None, host_dir: Path | None = None,
                  chmod: str | None = None, is_dryrun=False) -> ExitCode:
         ...
 
@@ -87,10 +87,14 @@ class Container(Host):
                                  quiet=quiet_failure, is_dryrun=is_dryrun)
 
     @override
-    def put_file(self, local_path: Path, chown: str | None, host_path: Path | None = None,
+    def put_file(self, local_path: Path, chown: str | None, host_dir: Path | None = None,
                  chmod: str | None = None, is_dryrun=False) -> ExitCode:
-        if not host_path:
-            host_path = Path(local_path.name)
+        if not host_dir:
+            host_dir = Path(".")
+            host_path = local_path.name
+        else:
+            host_path = host_dir / local_path.name
+
         docker_cmd = f"docker cp {local_path} {self.name}:{host_path}"
         (err, out) = cmd.run(docker_cmd, is_dryrun=is_dryrun)
         if err != 0:
