@@ -58,6 +58,8 @@ class Downloader:
             return 0
         try:
             log.info(f"Starting download from {url}...")
+            # don't overwrite destination until download complete
+            temp_path = save_path.with_suffix(save_path.suffix + ".tmp")
             with urllib.request.urlopen(url) as response:
                 # Check HTTP status
                 if response.status != 200:
@@ -69,15 +71,19 @@ class Downloader:
                 save_path.parent.mkdir(parents=True, exist_ok=True)
 
                 # Open file in binary write mode
-                with open(save_path, 'wb') as out_file:
+                with open(temp_path, 'wb') as out_file:
                     chunk_size = 8192
                     while True:
                         chunk = response.read(chunk_size)
                         if not chunk:
                             break
                         out_file.write(chunk)
+                # Move temp file to final destination
+                if save_path.exists():
+                    save_path.unlink()
+                temp_path.rename(save_path)
         except Exception as e:
-            log.error(f"Failed to download file from {url}: {e}")
+            log.error(f"Failed downloading file from {url}: {e}")
             return 1
 
         log.info(f"File downloaded successfully: {save_path}")
