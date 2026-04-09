@@ -62,5 +62,3 @@ class InstallSpark(Task):
         deploy_cfg = arg.get_config().get_deploy_cfg("spark")
         for host in ContainerBuild.get_deploy_hosts(deploy_cfg):
             self._install_host(host, tar_path, is_cached, is_dryrun)
-
-
