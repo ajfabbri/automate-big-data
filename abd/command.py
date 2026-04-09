@@ -38,7 +38,7 @@ def run(cmd: str, cwd: Path | None = None, input: str = "", is_dryrun=False,
     if is_dryrun:
         print(f"[DRY RUN] {cmd} (cwd={cwd})")
         return CmdResult(exit_code=0, std_out="")
-    log.info(f"-> {cmd} (cwd={cwd})")
+    log.debug(f"-> {cmd} (cwd={cwd})")
     result = subprocess.run(cmd, shell=True, input=input, text=True, capture_output=True, cwd=cwd)
     serr = result.stderr.strip()
     sout = result.stdout.strip()
@@ -53,7 +53,7 @@ def run(cmd: str, cwd: Path | None = None, input: str = "", is_dryrun=False,
 
 
 def run_raw(cmd: list[str], cwd: Path | None = None) -> ExitCode:
-    log.info(f"-> {cmd} (cwd={cwd})")
+    log.debug(f"-> {cmd} (cwd={cwd})")
     result = subprocess.run(cmd, cwd=cwd)
     if result.returncode != 0:
         log.error(f"Command failed with exit code {result.returncode}")
@@ -68,7 +68,7 @@ def run_print(cmd: str, cwd: Path | None = None, log_prefix="", quiet=False,
     if is_dryrun:
         print(f"{p}[DRY RUN] {cmd} (cwd={cwd})")
         return 0
-    log.info(f"{p}-> {cmd} (cwd={cwd})")
+    log.debug(f"{p}-> {cmd} (cwd={cwd})")
     with Popen(cmd, shell=True, text=True, cwd=cwd, stdout=subprocess.PIPE,
                stderr=subprocess.STDOUT) as proc:
         if proc.stdout is None:
@@ -92,7 +92,7 @@ def run_streaming(cmd: str, filter_re=".*", quiet=False,
         print(f"[DRY RUN] {cmd}")
         yield 0
         return
-    log.info(f"-> {cmd}")
+    log.debug(f"-> {cmd}")
     regex = re.compile(filter_re)
     with Popen(cmd, shell=True, text=True, stdout=subprocess.PIPE,
                stderr=subprocess.STDOUT) as proc:
