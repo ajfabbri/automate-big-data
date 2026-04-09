@@ -1,9 +1,13 @@
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Iterator, Protocol, override
+from logging import getLogger
 
 import abd.command as cmd
 from abd.project import CmdResult, ExitCode
+
+log = getLogger(__name__)
 
 
 class HostType(Enum):
@@ -29,6 +33,18 @@ class Host(Protocol):
 
     def run_streaming(self, command: str, filter_re=".*", quiet_failure=False,
                       is_dryrun=False) -> Iterator[str | ExitCode]:
+        ...
+
+    def run_throws(self, command, quiet_failure=False, is_dryrun=False) -> str:
+        (err, out) = self.run_command(command, quiet_failure=quiet_failure, is_dryrun=is_dryrun)
+        if err != 0:
+            e = f"Command '{command}' failed with exit code {err}"
+            log.error(f"{e}, output: {out}")
+            raise RuntimeError(e)
+        return out
+
+    def put_file(self, local_path: Path, chown: str | None, host_path: Path | None = None,
+                 is_dryrun=False) -> ExitCode:
         ...
 
 
@@ -69,3 +85,21 @@ class Container(Host):
         docker_cmd = self._make_cmd(command, quiet_failure)
         return cmd.run_streaming(docker_cmd, filter_re=filter_re,
                                  quiet=quiet_failure, is_dryrun=is_dryrun)
+
+    @override
+    def put_file(self, local_path: Path, chown: str | None, host_path: Path | None = None,
+                 is_dryrun=False) -> ExitCode:
+        if not host_path:
+            host_path = local_path
+        docker_cmd = f"docker cp {local_path} {self.name}:{host_path}"
+        (err, out) = cmd.run(docker_cmd, is_dryrun=is_dryrun)
+        if err != 0:
+            e = f"Failed to copy file to container {self.name}"
+            log.error(f"{e}: {out}")
+        elif chown:
+            (err, out) = self.run_command(f"sudo chown {chown} {host_path}",
+                                          is_dryrun=is_dryrun)
+            if err != 0:
+                e = f"Failed to chown file in container {self.name}"
+                log.error(f"{e}: {out}")
+        return err
