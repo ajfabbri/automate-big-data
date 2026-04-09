@@ -105,6 +105,19 @@ class HadoopBuild(ContainerBuild):
         u_builder = ImageBuilder(self.get_image_name(), base_dockerfile.parent)
         return u_builder.build_input(docker_input, is_dryrun)
 
+    def _infer_hadoop_version(self) -> str | None:
+        # For tar build installs with --cached, determine install version
+        # expected from filename, if possible
+        if self.is_prebuilt:
+            config_path = self.h_cfg.get_tar_build().tar_path
+            name = Path(config_path).name
+            # expects something like hadoop-3.4.0.tar.gz or hadoop-3.4.0-SNAPSHOT.tar.gz
+            if name.startswith("hadoop-") and name.endswith(".tar.gz"):
+                version = name[len("hadoop-"):-len(".tar.gz")]
+                log.debug(f"Inferred hadoop version {version} from tar filename.")
+                return version
+        return None
+
     def _push_hadoop_source(self, is_dryrun: bool) -> ExitCode:
         """ Push updates to hadoop source tree into container's dir. """
         # MacOS bind mounts are buggy: we manually copy from hadoop-host to hadoop
@@ -166,7 +179,8 @@ class HadoopBuild(ContainerBuild):
         if is_cached or self.is_prebuilt:
             path = self._find_hadoop_release(is_cached)
             if path:
-                log.info(f"[cache hit]: existing hadoop build {path}.")
+                p = "[cache hit]" if is_cached else "[skipped]"
+                log.info(f"{p}: existing hadoop build {path}.")
                 return 0
         check_cmd = "docker exec hadoop-build bash -lc '[ ! -z \"$MAVEN_OPTS\" ]'"
         (err, _) = cmd.run(check_cmd)
@@ -197,7 +211,9 @@ class HadoopBuild(ContainerBuild):
         if self.is_prebuilt:
             config_path = self.h_cfg.get_tar_build().tar_path
             dl = Downloader(URI(config_path), Project.get_build_dir())
-            tar_path = dl.fetch(cached=is_cached)
+            # XXX HACK TODO improve this
+            # tar_path = dl.fetch(cached=is_cached)
+            tar_path = dl.fetch(cached=True)
             if not tar_path:
                 log.error(f"Failed to get hadoop tar build from {config_path}.")
                 return tar_path
@@ -222,8 +238,10 @@ class HadoopBuild(ContainerBuild):
             log.warning("Failed to find hadoop release.")
         return path
 
+    # TODO use output path from build task instead of searching
     def _find_cloudstore_release(self) -> Tuple[Path | None, str]:
         dist_dir = Path(self.docker_home_dir) / "cloudstore" / "target"
+        # TODO use Host run method instead of raw docker commands
         list_cmd = f"docker exec hadoop-build bash -c 'find {dist_dir} -name cloudstore-*.jar'"
         (exit_code, output) = cmd.run(list_cmd)
         paths = [Path(line.strip()) for line in output.splitlines() if line.strip()]
@@ -238,13 +256,8 @@ class HadoopBuild(ContainerBuild):
         (path, _) = self._find_cloudstore_release()
         return path
 
-    def fetch_hadoop_build(self, local_dir: Path, is_cached=False) -> tuple[ExitCode, Path | None]:
-        if is_cached:
-            paths = local_dir.glob("hadoop-*.tar.gz")
-            first_match = next(paths, None)
-            if first_match:
-                log.info(f"[cache hit] existing hadoop build {first_match}.")
-                return (0, first_match)
+    def fetch_hadoop_build(self, local_dir: Path, is_cached=False,
+                           is_dryrun=False) -> tuple[ExitCode, Path | None]:
         path = self.find_hadoop_release(is_cached)
         if not path:
             return (1, None)
@@ -254,8 +267,9 @@ class HadoopBuild(ContainerBuild):
             # checksum verified
             return (0, path)
         local_dir.mkdir(parents=True, exist_ok=True)
+        # TODO use Host put_file() instead of raw docker commands
         c = f"docker cp hadoop-build:{path} {local_dir}/"
-        (ret, _) = cmd.run(c)
+        (ret, _) = cmd.run(c, is_dryrun=is_dryrun)
         if ret != 0:
             log.error(f"Failed to copy hadoop release from {HADOOP_BUILD_CONTAINER}.")
             return (ret, None)
@@ -370,16 +384,18 @@ class InstallHadoop(Task):
 
     def _install_hadoop(self, app: App, is_cached: bool, is_dryrun: bool):
         n_build = ClusterNodeBuild(app)
-        if is_cached and n_build.check_hadoop_install():
-            log.info("[cache hit] existing Hadoop installation on cluster nodes.")
-        else:
-            h_build = HadoopBuild(app)
-            (err, path) = h_build.fetch_hadoop_build(self.get_output_dir(), is_cached=is_cached)
-            if err != 0 or not path:
-                raise RuntimeError("Failed to fetch hadoop release from container.")
-            err = n_build.install_hadoop(path, is_dryrun)
-            if err != 0:
-                raise RuntimeError("Failed to install hadoop on cluster nodes.")
+        h_build = HadoopBuild(app)
+        if is_cached:
+            version = h_build._infer_hadoop_version()
+            if version and n_build.check_hadoop_install(version):
+                log.info(f"[cache hit] existing Hadoop {version} installation on cluster nodes.")
+            else:
+                (err, path) = h_build.fetch_hadoop_build(self.get_output_dir(), is_cached=is_cached)
+                if err != 0 or not path:
+                    raise RuntimeError("Failed to fetch hadoop release from container.")
+                err = n_build.install_hadoop(path, is_dryrun)
+                if err != 0:
+                    raise RuntimeError("Failed to install hadoop on cluster nodes.")
 
         # Copy auth-keys.yml config for s3 (localstack) etc.
         config_path = Project.get_project_root() / "config" / "auth-keys.xml"
