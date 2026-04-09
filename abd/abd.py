@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 import logging
 import sys
 from typing import List
@@ -37,10 +38,15 @@ def do_deploy(app: App, args: argparse.Namespace) -> ExitCode:
     ret: ExitCode = 0
     runner = NewRunner(app)
     name_filter = args.name if hasattr(args, "name") else None
+    want_json = args.json if hasattr(args, "json") else False
     match args.deploy_cmd:
         case "list":
-            for cname in Containers.list(name_filter):
-                print(cname)
+            for line in Containers.list(name_filter, want_json=want_json):
+                if want_json:
+                    obj = json.loads(line)
+                    print(json.dumps(obj, indent=2))
+                else:
+                    print(line)
         case "run":
             return runner.run(f"{PhaseType.DEPLOY}:", app.args.cached)
         case "stop":
@@ -188,6 +194,9 @@ def main(argv: List[str] | None = None) -> ExitCode:
     deploy_sub = deploy_p.add_subparsers(dest="deploy_cmd", required=True)
     d_list_p = deploy_sub.add_parser("list", help="List deployment (hosts, etc.)")
     add_name_opt(d_list_p)
+    d_list_p.add_argument("-j", "--json", action="store_true",
+                          help="Output full host info in JSON format")
+
     d_run_p = deploy_sub.add_parser("run", help=f"Run deployment.\n{TASKID_HELP}")
     add_cached_opt(d_run_p)
     add_interactive_opt(d_run_p)
