@@ -143,6 +143,23 @@ class ClusterNodeBuild(ContainerBuild):
             return 1
         return 0
 
+    def _set_optional_tools(self, val="hadoop-aws,hadoop-azure", is_dryrun=False) -> ExitCode:
+        script = Project.get_project_root() / "abd/scripts/ensure-line-in-file.sh"
+        for host in self.get_deploy_hosts(self.deploy_cfg):
+            err = host.put_file(script, chown=self.CONTAINER_USERNAME, chmod="750",
+                                host_path=Path(self.docker_home_dir) / script.name,
+                                is_dryrun=is_dryrun)
+            if err != 0:
+                return err
+            henv_path = "/opt/hadoop/etc/hadoop/hadoop-env.sh"
+            line = f"export HADOOP_OPTIONAL_TOOLS=\"{val}\""
+            cmd = f"{self.docker_home_dir}/ensure-line-in-file.sh {henv_path} '{line}'"
+            (err, out) = host.run_command(cmd, is_dryrun=is_dryrun)
+            if err != 0:
+                log.error(f"Failed to set HADOOP_OPTIONAL_TOOLS in {host.get_name()}: {out}")
+                return err
+        return 0
+
     def install_hadoop_aws(self, is_dryrun=False) -> ExitCode:
         """ Hadoop releases no longer include AWS SDK depencency; it is too huge.
         This function derives the required version and installs it. """
@@ -187,14 +204,16 @@ class ClusterNodeBuild(ContainerBuild):
                     log.error(f"Fail copying AWS SDK jar to shared/ {host.get_name()}: {out}")
                     return err
                 is_first = False
-            else:
-                cmd = f"cp {self.docker_home_dir}/shared/bundle-{sdk_vers}.jar"
-                # TODO is this the right path?
-                cmd += " /opt/hadoop/share/hadoop/tools/lib"
-                (err, out) = host.run_command(cmd, is_dryrun=is_dryrun)
-                if err != 0:
-                    log.error(f"Fail copying AWS SDK jar from shared/ {host.get_name()}: {out}")
-                    return err
+
+            cmd = f"cp {self.docker_home_dir}/shared/bundle-{sdk_vers}.jar"
+            cmd += " /opt/hadoop/share/hadoop/common/lib"
+            (err, out) = host.run_command(cmd, is_dryrun=is_dryrun)
+            if err != 0:
+                log.error(f"Fail copying AWS SDK jar from shared/ {host.get_name()}: {out}")
+                return err
+            err = self._set_optional_tools()
+            if err != 0:
+                return err
         return 0
 
     def install_hadoop(self, local_tar: Path, is_dryrun: bool) -> ExitCode:
