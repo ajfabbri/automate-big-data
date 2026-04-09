@@ -300,7 +300,7 @@ class HadoopSrc(Task):
                 # TODO is_dryrun
                 git = Git(HADOOP_GIT_URI, local_hadoop, arg.ui)
                 git.clone(git_ref, is_interactive)
-            case TarBuild(tar_path=tar_path):
+            case TarBuild(tar_path=_):
                 log.info("[skipped] no git repo needed for tar build")
             # TODO support for TarSource & build from source release tarball
 
