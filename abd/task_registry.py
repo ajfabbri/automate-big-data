@@ -1,5 +1,6 @@
 from abd.builder.hadoop import BuildHadoopRelease, DeployHadoopBuildContainer, \
     HadoopSrc, HadoopBuildImageTask, InstallHadoop
+from abd.builder.spark import InstallSpark
 from abd.container.cluster import ClusterTask
 from abd.container.cluster_node import NodeBuildTask, NodeDeployTask, SharedSsh
 from abd.container.localstack import LocalstackTask
@@ -26,6 +27,8 @@ tasks: list[Task] = [
     DeployHadoopBuildContainer(),
     BuildHadoopRelease(),
     InstallHadoop(),
+    InstallSpark(),
+
 
     #  _        __
     # (_)_ __  / _|_ __ __ _
