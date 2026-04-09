@@ -121,17 +121,19 @@ class ClusterNodeBuild(ContainerBuild):
         return found
 
     # TODO move to hadoop module
-    def check_hadoop_install(self) -> bool:
+    def check_hadoop_install(self, required_version: str | None = None) -> bool:
         any_missing = False
         for host in self.get_deploy_hosts(self.deploy_cfg):
-            c = f"""
-            docker exec {host} bash -c
-            'if [ ! -f /opt/hadoop/bin/hadoop ]; then exit 1; fi'
-            """
-            (err, _) = host.run_command(c, quiet_failure=True)
+            (err, output) = host.run_command(r"hadoop version | head -1 | awk '{ print $2}'")
             if err != 0:
                 any_missing = True
                 log.debug(f"check_hadoop_install({host}) -> False")
+                continue
+            installed = output.strip()
+            if required_version and installed != required_version:
+                any_missing = True
+                log.debug(f"check_hadoop_install({host}) -> version mismatch: "
+                          + f"{installed} != {required_version})")
         return not any_missing
 
     def _validate_aws_vers(self, version: str) -> ExitCode:
