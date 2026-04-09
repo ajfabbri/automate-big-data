@@ -1,6 +1,4 @@
-import hashlib
 from pathlib import Path
-from urllib.parse import urlsplit
 import logging
 from time import sleep
 from typing import Set, Tuple, override
@@ -11,7 +9,7 @@ from abd.container.cluster import ClusterTask
 from abd.container.cluster_node import ClusterNodeBuild
 from abd.container.container import ContainerBuild, Containers
 from abd.context import App
-from abd.download import download_binary
+from abd.download import URI, Downloader
 from abd.git import Git
 from abd.job.phases import Task, TaskId, PhaseType
 from abd.project import ExitCode, Project
@@ -166,7 +164,7 @@ class HadoopBuild(ContainerBuild):
         """ build hadoop common and cloudstore """
 
         if is_cached or self.is_prebuilt:
-            (path, _) = self._find_hadoop_release()
+            path = self._find_hadoop_release(is_cached)
             if path:
                 log.info(f"[cache hit]: existing hadoop build {path}.")
                 return 0
@@ -194,60 +192,16 @@ class HadoopBuild(ContainerBuild):
         """
         return cmd.run_print(build_cmd, is_dryrun=is_dryrun)
 
-    def _validate_checksum(self, binary_path: Path, checksum_path: Path) -> bool:
-        with open(checksum_path, "r") as f:
-            expect = f.read().split("=")[1].strip()
-            sha512 = hashlib.sha512()
-            with open(binary_path, "rb") as bf:
-                for chunk in iter(lambda: bf.read(8192), b""):
-                    sha512.update(chunk)
-        calc = sha512.hexdigest()
-        if calc != expect:
-            log.info(f"Checksum mismatch {binary_path}: expect {expect}, got {calc}")
-            return False
-        log.debug(f"Checksum match {binary_path}: {expect}")
-        return True
-
-    def _resolve_tar_build(self, tar_path: str) -> Tuple[Path | None, str]:
-        split = urlsplit(tar_path)
-        # TODO also download checksum and verify
-        if split.scheme in ["http", "https"]:
-            log.info(f"Using hadoop tar build from URL {tar_path}")
-            checksum_url = tar_path + ".sha512"
-            checksum_save = Project.get_build_dir() / Path(checksum_url).name
-            (err, local_checksum) = download_binary(checksum_url, checksum_save)
-            if err != 0 or not local_checksum:
-                return (None, f"Failed to download checksum from {checksum_url}")
-            save_path = Project.get_build_dir() / Path(tar_path).name
-            # if save path already exists, we can skip download if checksum matches
-            if save_path.exists() and self._validate_checksum(save_path, local_checksum):
-                log.info(f"[skipped] Checksum matches existing file {save_path}, skip download.")
-                return (save_path, "")
-
-            (err, local_path) = download_binary(tar_path, save_path)
-            if err != 0 or not local_path:
-                return (None, f"Failed to download hadoop tar build from {tar_path}")
-            if not self._validate_checksum(local_path, local_checksum):
-                return (None, f"Checksum mismatch for downloaded build {tar_path}")
-            return (local_path, "")
-        elif split.scheme == "":
-            local_path = Path(tar_path)
-            if local_path.exists():
-                return (local_path, "")
-            else:
-                return (None, f"Hadoop tar build not found at {tar_path}")
-        else:
-            return (None, f"Bad URL scheme {split.scheme} for hadoop tar build")
-
-    def _find_hadoop_release(self) -> Tuple[Path | None, str]:
-        """ Find hadoop path, Returns (path, "") or (None, command_output) on failure. """
+    def _find_hadoop_release(self, is_cached: bool) -> Path | None:
+        """ Find hadoop path, Returns path or None on failure. """
         if self.is_prebuilt:
             config_path = self.h_cfg.get_tar_build().tar_path
-            (tar_path, err_output) = self._resolve_tar_build(config_path)
+            dl = Downloader(URI(config_path), Project.get_build_dir())
+            tar_path = dl.fetch(cached=is_cached)
             if not tar_path:
-                log.error(f"Failed to resolve hadoop tar build from {config_path}: {err_output}")
-                return (tar_path, "")
-            return (tar_path, "")
+                log.error(f"Failed to get hadoop tar build from {config_path}.")
+                return tar_path
+            return tar_path
 
         dist_dir = Path(self.docker_home_dir) / "hadoop" / "hadoop-dist" / "target"
         # TODO use Host run method instead of raw-dogging docker container
@@ -258,14 +212,14 @@ class HadoopBuild(ContainerBuild):
         paths.sort(reverse=True)
         if exit_code != 0 or len(paths) == 0:
             log.error(f"Failed to find hadoop release.. {output}")
-            return (None, output)
-        return (paths[0], "")
+            return None
+        return paths[0]
 
-    def find_hadoop_release(self) -> Path | None:
+    def find_hadoop_release(self, is_cached: bool) -> Path | None:
         # TODO separate finding locally versus on build container?
-        (path, output) = self._find_hadoop_release()
+        (path) = self._find_hadoop_release(is_cached)
         if not path:
-            log.warning(f"Failed to find hadoop release.. {output}")
+            log.warning("Failed to find hadoop release.")
         return path
 
     def _find_cloudstore_release(self) -> Tuple[Path | None, str]:
@@ -291,7 +245,7 @@ class HadoopBuild(ContainerBuild):
             if first_match:
                 log.info(f"[cache hit] existing hadoop build {first_match}.")
                 return (0, first_match)
-        path = self.find_hadoop_release()
+        path = self.find_hadoop_release(is_cached)
         if not path:
             return (1, None)
         log.debug(f"Using hadoop build: {path}")

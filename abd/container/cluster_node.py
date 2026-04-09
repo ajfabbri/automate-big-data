@@ -79,30 +79,23 @@ class ClusterNodeBuild(ContainerBuild):
             self.app.hosts.add(Container(container_name))
         return ret
 
-    def _resolve_container_path(self, path: str | None = None) -> str:
+    def _resolve_container_path(self, path: str | None = None) -> Path:
         dest_path = path if path else self.docker_home_dir
         # substitute $HOME for container's home dir
-        return dest_path.replace("$HOME", self.docker_home_dir)
+        return Path(dest_path.replace("$HOME", self.docker_home_dir))
 
     # TODO move to Host.put_file()
     def copy_to_containers(self, local_path: Path, container_path: str | None = None,
                            is_dryrun=False) -> ExitCode:
-        ret = 0
+        err = 0
         dest_path = self._resolve_container_path(container_path)
-        for i in range(self.deploy_cfg.num_nodes):  # type: ignore
-            container_name = f"cluster-node-{i}"
-            c = f"docker cp {local_path} {container_name}:{dest_path}"
-            (ret, output) = cmd.run(c, is_dryrun=is_dryrun)
-            if ret != 0:
-                log.error(f"Failed to copy {local_path} to {container_name}: {output}")
-                return ret
-            c = f"docker exec {container_name} bash -c 'sudo chown -R {self.CONTAINER_USERNAME}:" \
-                f"{self.CONTAINER_USERNAME} {dest_path}'"
-            (ret, output) = cmd.run(c, is_dryrun=is_dryrun)
-            if ret != 0:
-                log.error(f"Failed to set ownership of {dest_path} in {container_name}: {output}")
-                return ret
-        return 0
+        for host in self.get_deploy_hosts(self.deploy_cfg):
+            err = host.put_file(local_path, chown=self.CONTAINER_USERNAME,
+                                host_path=dest_path, is_dryrun=is_dryrun)
+            if err != 0:
+                log.error(f"Failed to copy {local_path} to {host.get_name()}:{dest_path}")
+                break
+        return err
 
     def find_in_containers(self, glob: str, container_path: str | None = None) -> str | None:
         """ Find the first path matching 'glob' and return it if same for all containers. """
