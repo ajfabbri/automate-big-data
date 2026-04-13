@@ -121,14 +121,14 @@ class S3ALargeFile(Task):
         put_cmd = cs_cmd + "put /tmp/testfile s3a://abd-bucket/testfile"
         make_file_cmd = "dd if=/dev/urandom of=/tmp/testfile bs=1M count=10"
 
-        res = source_node.run_command(make_file_cmd, is_dryrun)
+        res = source_node.run_command(make_file_cmd, is_dryrun=is_dryrun)
         self._check_result(log, res, f"Failed create test file on {source_node}: {make_file_cmd}")
 
-        res = source_node.run_command(put_cmd, is_dryrun)
+        res = source_node.run_command(put_cmd, is_dryrun=is_dryrun)
         self._check_result(log, res, f"Failed put file to s3a from {source_node}: {put_cmd}")
 
         get_cmd = "hadoop fs -get -f s3a://abd-bucket/testfile /tmp/testfile.downloaded"
-        res = dest_node.run_command(get_cmd, is_dryrun)
+        res = dest_node.run_command(get_cmd, is_dryrun=is_dryrun)
         self._check_result(log, res, f"Failed get file from s3a on {dest_node}: {get_cmd}")
 
         src_hash = self._md5_sum(log, source_node, Path("/tmp/testfile"), is_dryrun)

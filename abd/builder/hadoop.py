@@ -385,17 +385,20 @@ class InstallHadoop(Task):
     def _install_hadoop(self, app: App, is_cached: bool, is_dryrun: bool):
         n_build = ClusterNodeBuild(app)
         h_build = HadoopBuild(app)
+        should_install = True
         if is_cached:
             version = h_build._infer_hadoop_version()
             if version and n_build.check_hadoop_install(version):
                 log.info(f"[cache hit] existing Hadoop {version} installation on cluster nodes.")
-            else:
-                (err, path) = h_build.fetch_hadoop_build(self.get_output_dir(), is_cached=is_cached)
-                if err != 0 or not path:
-                    raise RuntimeError("Failed to fetch hadoop release from container.")
-                err = n_build.install_hadoop(path, is_dryrun)
-                if err != 0:
-                    raise RuntimeError("Failed to install hadoop on cluster nodes.")
+                should_install = False
+
+        if should_install:
+            (err, path) = h_build.fetch_hadoop_build(self.get_output_dir(), is_cached=is_cached)
+            if err != 0 or not path:
+                raise RuntimeError("Failed to fetch hadoop release from container.")
+            err = n_build.install_hadoop(path, is_dryrun)
+            if err != 0:
+                raise RuntimeError("Failed to install hadoop on cluster nodes.")
 
         # Copy auth-keys.yml config for s3 (localstack) etc.
         config_path = Project.get_project_root() / "config" / "auth-keys.xml"

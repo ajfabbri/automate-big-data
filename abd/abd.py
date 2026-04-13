@@ -48,7 +48,8 @@ def do_deploy(app: App, args: argparse.Namespace) -> ExitCode:
                 else:
                     print(line)
         case "run":
-            return runner.run(f"{PhaseType.DEPLOY}:", app.args.cached)
+            return runner.run(f"{PhaseType.DEPLOY}:", app.args.cached,
+                              single_thread=app.args.is_serial)
         case "stop":
             return Containers.stop(name_filter)
         case "attach":
@@ -244,7 +245,7 @@ def main(argv: List[str] | None = None) -> ExitCode:
 
 
 if __name__ == "__main__":
-    err = main(sys.argv)
+    err = main(sys.argv[1:])
     if err != 0:
         log.error(f"⛔️ abd exiting with code {err}.")
     sys.exit(err)
