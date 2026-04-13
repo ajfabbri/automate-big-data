@@ -65,6 +65,6 @@ class Task[T: App](Protocol):
 
     def _md5_sum(self, log: Logger, host: Host, path: Path, is_dryrun=False) -> str:
         cmd = f"md5sum {path}"
-        (err, out) = host.run_command(cmd, is_dryrun)
+        (err, out) = host.run_command(cmd, is_dryrun=is_dryrun)
         self._check_err(log, err, f"Failed to compute md5 of {path} on {host.get_name()}: {cmd}")
         return out.strip().split()[0]
