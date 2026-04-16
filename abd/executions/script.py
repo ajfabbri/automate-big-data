@@ -4,7 +4,7 @@ import logging
 from typing import Dict, Iterable, List, Protocol, Tuple
 
 from abd.host import Host
-from abd.project import ExitCode, camel_to_snake
+from abd.core.project import ExitCode, camel_to_snake
 
 log = logging.getLogger(__name__)
 

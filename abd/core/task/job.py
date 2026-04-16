@@ -1,7 +1,7 @@
 import logging
 from typing import Self
 from abd.config.phase import ConfigTask
-from abd.job.phases import PhaseType, Task, TaskId
+from abd.core.task.phases import PhaseType, Task, TaskId
 
 log = logging.getLogger(__name__)
 

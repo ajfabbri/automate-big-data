@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 
 import abd.command as cmd
-from abd.project import ExitCode
+from abd.core.project import ExitCode
 
 log = logging.getLogger(__name__)
 

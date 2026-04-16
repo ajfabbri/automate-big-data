@@ -7,7 +7,7 @@ from typing import ClassVar, Protocol, Set
 
 from abd.context import App
 from abd.host import Host
-from abd.project import CmdResult, Project
+from abd.core.project import CmdResult, Project
 
 
 class PhaseType(StrEnum):

@@ -7,7 +7,7 @@ import sys
 from typing import List
 
 from abd import task_registry
-from abd import project
+from abd.core import project
 from abd.config.phase import ConfigTask
 from abd.config.raw import Config
 from abd.config.raw import Loader
@@ -15,9 +15,9 @@ import abd.command as cmd
 from abd.container.cluster_node import ClusterNodeBuild
 from abd.container.container import Containers
 from abd.context import App, Args
-from abd.job.job import Job
-from abd.job.phases import PhaseType
-from abd.project import ExitCode
+from abd.core.task.job import Job
+from abd.core.task.phases import PhaseType
+from abd.core.project import ExitCode
 from abd.runner import NewRunner
 from abd.ui import Ui
 

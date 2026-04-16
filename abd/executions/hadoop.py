@@ -8,7 +8,7 @@ from abd.config.raw import DeployCfg
 from abd.container.cluster_node import ClusterNodeBuild
 from abd.context import App
 from abd.executions.script import Script
-from abd.job.phases import PhaseType, Task, TaskId
+from abd.core.task.phases import PhaseType, Task, TaskId
 
 log = logging.getLogger(__name__)
 

@@ -7,8 +7,8 @@ from abd.container.cluster_node import ClusterNodeBuild, SharedSsh
 from abd.context import App
 from abd.download import URI, Downloader
 from abd.host import Host
-from abd.job.phases import PhaseType, Task, TaskId
-from abd.project import Project
+from abd.core.task.phases import PhaseType, Task, TaskId
+from abd.core.project import Project
 from abd.util import unwrap
 
 SPARK_HOME = Path("/opt/spark")

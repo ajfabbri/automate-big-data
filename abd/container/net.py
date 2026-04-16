@@ -2,7 +2,7 @@ import logging
 from typing import override
 from abd.container.container import Containers
 from abd.context import App
-from abd.job.phases import PhaseType, Task, TaskId
+from abd.core.task.phases import PhaseType, Task, TaskId
 
 log = logging.getLogger(__name__)
 

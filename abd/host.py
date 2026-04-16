@@ -5,7 +5,7 @@ from typing import Iterator, Protocol, override
 from logging import getLogger
 
 import abd.command as cmd
-from abd.project import CmdResult, ExitCode
+from abd.core.project import CmdResult, ExitCode
 
 log = getLogger(__name__)
 

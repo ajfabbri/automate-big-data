@@ -6,7 +6,7 @@ import abd.command as cmd
 from abd.config.raw import Config, DeployCfg
 from abd.context import App
 from abd.host import Container, Host
-from abd.project import ExitCode
+from abd.core.project import ExitCode
 log = logging.getLogger(__name__)
 
 

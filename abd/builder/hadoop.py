@@ -11,8 +11,8 @@ from abd.container.container import ContainerBuild, Containers
 from abd.context import App
 from abd.download import URI, Downloader
 from abd.git import Git
-from abd.job.phases import Task, TaskId, PhaseType
-from abd.project import ExitCode, Project
+from abd.core.task.phases import Task, TaskId, PhaseType
+from abd.core.project import ExitCode, Project
 
 log = logging.getLogger(__name__)
 

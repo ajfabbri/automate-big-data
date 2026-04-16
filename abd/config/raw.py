@@ -6,7 +6,7 @@ from typing import Dict, Optional, override
 import tomllib
 import tomli_w
 import logging
-from abd.project import Project
+from abd.core.project import Project
 from abd.ui import Ui
 
 log = logging.getLogger(__name__)

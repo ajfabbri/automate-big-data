@@ -5,7 +5,7 @@ import logging
 import urllib.request
 from urllib.parse import urlsplit
 
-from abd.project import ExitCode
+from abd.core.project import ExitCode
 
 log = logging.getLogger(__name__)
 # TODO unit tests

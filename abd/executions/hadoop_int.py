@@ -5,8 +5,8 @@ from typing import override
 from abd.builder.hadoop import BuildHadoopRelease, HadoopBuild
 from abd.container.localstack import LocalstackTask
 from abd.host import Container
-from abd.job.phases import PhaseType, Task, TaskId
-from abd.project import ExitCode
+from abd.core.task.phases import PhaseType, Task, TaskId
+from abd.core.project import ExitCode
 
 log = logging.getLogger(__name__)
 

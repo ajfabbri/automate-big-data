@@ -11,7 +11,7 @@ from subprocess import Popen
 import sys
 import time
 
-from abd.project import CmdResult, ExitCode
+from abd.core.project import CmdResult, ExitCode
 from abd.ui import Ui
 
 log = logging.getLogger(__name__)

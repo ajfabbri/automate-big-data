@@ -7,8 +7,8 @@ from abd.container.localstack import LocalstackTask
 from abd.container.net import NetworkTask
 from abd.executions.hadoop import HadoopSanityTask, S3ALargeFile, S3ARoundTrip
 from abd.executions.hadoop_int import HadoopS3aIntegration
-from abd.job.job import Job
-from abd.job.phases import Task
+from abd.core.task.job import Job
+from abd.core.task.phases import Task
 
 
 # All tasks are registered here.

@@ -5,9 +5,8 @@ import abd.command as cmd
 from abd.container.container import ContainerBuild, Containers
 from abd.container.net import NetworkTask
 from abd.context import App
-from abd.job.phases import Task, TaskId, PhaseType
-from abd.project import ExitCode
-
+from abd.core.task.phases import Task, TaskId, PhaseType
+from abd.core.project import ExitCode
 log = logging.getLogger(__name__)
 
 

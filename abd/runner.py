@@ -8,9 +8,9 @@ from typing import Callable, MutableMapping
 
 from abd.config.phase import ConfigTask
 from abd.context import App
-from abd.job.job import Job, TaskIdSet
-from abd.job.phases import Task, TaskId
-from abd.project import ExitCode
+from abd.core.task.job import Job, TaskIdSet
+from abd.core.task.phases import Task, TaskId
+from abd.core.project import ExitCode
 
 log = logging.getLogger(__name__)
 
