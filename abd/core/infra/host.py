@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Iterator, Protocol, override
 from logging import getLogger
 
-import abd.command as cmd
+import abd.core.command as cmd
 from abd.core.project import CmdResult, ExitCode
 
 log = getLogger(__name__)

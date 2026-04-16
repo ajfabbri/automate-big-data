@@ -2,7 +2,7 @@
 from pathlib import Path
 import logging
 
-from abd import command
+from abd.core import command
 from abd.ui import Ui
 
 log = logging.getLogger(__name__)

@@ -1,8 +1,8 @@
 import argparse
 from dataclasses import dataclass
 from abd.config.raw import Config
-from abd.host import Host
-from abd.sysinfo import Sysinfo
+from abd.core.infra.host import Host
+from abd.core.sysinfo import Sysinfo
 from abd.ui import Ui
 
 

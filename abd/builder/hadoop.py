@@ -2,15 +2,15 @@ from pathlib import Path
 import logging
 from time import sleep
 from typing import Set, Tuple, override
-from abd.builder.image import ImageBuilder
+from abd.core.infra.image import ImageBuilder
 from abd.config.raw import HADOOP_GIT_URI, BuildType, GitSource, TarBuild
-import abd.command as cmd
+import abd.core.command as cmd
 from abd.container.cluster import ClusterTask
 from abd.container.cluster_node import ClusterNodeBuild
-from abd.container.container import ContainerBuild, Containers
-from abd.context import App
-from abd.download import URI, Downloader
-from abd.git import Git
+from abd.core.infra.container import ContainerBuild, Containers
+from abd.core.context import App
+from abd.core.download import URI, Downloader
+from abd.core.git import Git
 from abd.core.task.phases import Task, TaskId, PhaseType
 from abd.core.project import ExitCode, Project
 

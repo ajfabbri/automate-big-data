@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import logging
 from pathlib import Path
 
-import abd.command as cmd
+import abd.core.command as cmd
 from abd.core.project import ExitCode
 
 log = logging.getLogger(__name__)

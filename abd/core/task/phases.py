@@ -5,8 +5,8 @@ from logging import Logger
 from pathlib import Path
 from typing import ClassVar, Protocol, Set
 
-from abd.context import App
-from abd.host import Host
+from abd.core.context import App
+from abd.core.infra.host import Host
 from abd.core.project import CmdResult, Project
 
 

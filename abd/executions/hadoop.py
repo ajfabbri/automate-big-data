@@ -3,10 +3,10 @@ from pathlib import Path
 from typing import List, override
 
 from abd.builder.hadoop import HADOOP_HOME, InstallHadoop
-import abd.command as cmd
+import abd.core.command as cmd
 from abd.config.raw import DeployCfg
 from abd.container.cluster_node import ClusterNodeBuild
-from abd.context import App
+from abd.core.context import App
 from abd.executions.script import Script
 from abd.core.task.phases import PhaseType, Task, TaskId
 

@@ -3,13 +3,13 @@ from pathlib import Path
 from typing import Set, override
 import re
 
-from abd.builder.image import ImageBuilder
-import abd.command as cmd
+from abd.core.infra.image import ImageBuilder
+import abd.core.command as cmd
 from abd.config.raw import BuildType
-from abd.container.container import ContainerBuild, Containers
-from abd.container.net import NetworkTask
-from abd.context import App
-from abd.host import Container, Host
+from abd.core.infra.container import ContainerBuild, Containers
+from abd.core.infra.net import NetworkTask
+from abd.core.context import App
+from abd.core.infra.host import Container, Host
 from abd.core.task.phases import Task, TaskId, PhaseType
 from abd.core.project import ExitCode, Project
 

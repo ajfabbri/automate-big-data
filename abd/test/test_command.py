@@ -1,4 +1,4 @@
-import abd.command as cmd
+import abd.core.command as cmd
 
 import logging
 import unittest

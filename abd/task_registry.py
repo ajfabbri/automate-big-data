@@ -4,7 +4,7 @@ from abd.builder.spark import InstallSpark
 from abd.container.cluster import ClusterTask
 from abd.container.cluster_node import NodeBuildTask, NodeDeployTask, SharedSsh
 from abd.container.localstack import LocalstackTask
-from abd.container.net import NetworkTask
+from abd.core.infra.net import NetworkTask
 from abd.executions.hadoop import HadoopSanityTask, S3ALargeFile, S3ARoundTrip
 from abd.executions.hadoop_int import HadoopS3aIntegration
 from abd.core.task.job import Job

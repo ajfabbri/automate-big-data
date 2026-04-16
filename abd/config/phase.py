@@ -1,7 +1,7 @@
 
 from typing import override
 from abd.config.raw import Loader
-from abd.context import App
+from abd.core.context import App
 from abd.core.task.phases import Task, TaskId, PhaseType
 
 

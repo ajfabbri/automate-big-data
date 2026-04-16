@@ -3,7 +3,7 @@ from typing import override
 
 from abd.container.cluster_node import NodeDeployTask
 from abd.container.localstack import LocalstackTask
-from abd.context import App
+from abd.core.context import App
 from abd.core.task.phases import PhaseType, Task, TaskId
 
 log = logging.getLogger(__name__)

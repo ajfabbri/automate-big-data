@@ -4,12 +4,12 @@ from typing import Set, override
 from abd.builder.hadoop import HADOOP_HOME, InstallHadoop
 from abd.config.raw import BuildCfg, BuildType
 from abd.container.cluster_node import ClusterNodeBuild, SharedSsh
-from abd.context import App
-from abd.download import URI, Downloader
-from abd.host import Host
+from abd.core.context import App
+from abd.core.download import URI, Downloader
+from abd.core.infra.host import Host
 from abd.core.task.phases import PhaseType, Task, TaskId
 from abd.core.project import Project
-from abd.util import unwrap
+from abd.core.util import unwrap
 
 SPARK_HOME = Path("/opt/spark")
 log = logging.getLogger(__name__)

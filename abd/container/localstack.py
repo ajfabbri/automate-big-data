@@ -1,10 +1,10 @@
 import json
 import logging
 from typing import override
-import abd.command as cmd
-from abd.container.container import ContainerBuild, Containers
-from abd.container.net import NetworkTask
-from abd.context import App
+import abd.core.command as cmd
+from abd.core.infra.container import ContainerBuild, Containers
+from abd.core.infra.net import NetworkTask
+from abd.core.context import App
 from abd.core.task.phases import Task, TaskId, PhaseType
 from abd.core.project import ExitCode
 log = logging.getLogger(__name__)

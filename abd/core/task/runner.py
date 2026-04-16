@@ -7,7 +7,7 @@ import time
 from typing import Callable, MutableMapping
 
 from abd.config.phase import ConfigTask
-from abd.context import App
+from abd.core.context import App
 from abd.core.task.job import Job, TaskIdSet
 from abd.core.task.phases import Task, TaskId
 from abd.core.project import ExitCode

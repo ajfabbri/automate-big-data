@@ -2,10 +2,10 @@ from pathlib import Path
 import logging
 from typing import List, Protocol
 
-import abd.command as cmd
+import abd.core.command as cmd
 from abd.config.raw import Config, DeployCfg
-from abd.context import App
-from abd.host import Container, Host
+from abd.core.context import App
+from abd.core.infra.host import Container, Host
 from abd.core.project import ExitCode
 log = logging.getLogger(__name__)
 
